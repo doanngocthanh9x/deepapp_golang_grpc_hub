@@ -2,8 +2,8 @@ syntax = "proto3";
 
 package hub;
 
-option java_package = "com.deepapp.hub";
 option go_package = "deepapp_golang_grpc_hub/internal/proto";
+option java_package = "com.deepapp.hub";
 
 service HubService {
   rpc Connect(stream Message) returns (stream Message);
@@ -28,6 +28,7 @@ enum MessageType {
   REGISTER = 3; // Worker registration
   REQUEST = 4;  // Service request
   RESPONSE = 5; // Service response
+  WORKER_CALL = 6; // Worker-to-Worker call
 }
 
 // Worker registration message

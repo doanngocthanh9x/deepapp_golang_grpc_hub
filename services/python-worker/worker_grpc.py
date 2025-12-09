@@ -9,6 +9,8 @@ import json
 import time
 import sys
 import os
+import uuid
+import threading
 from datetime import datetime
 
 # Import generated proto files
@@ -25,6 +27,8 @@ class PythonWorker:
         self.channel = None
         self.stub = None
         self.running = False
+        self.pending_calls = {}  # Track pending worker-to-worker calls
+        self.pending_lock = threading.Lock()  # Thread-safe access
         
     def handle_hello(self, msg):
         """Handle hello request"""
@@ -77,6 +81,164 @@ class PythonWorker:
             }
             return json.dumps(error_data)
     
+    def handle_composite_task(self, msg):
+        """
+        Demo capability: Calls Java worker's file info capability
+        This demonstrates worker-to-worker communication
+        """
+        msg_from = getattr(msg, 'from')
+        print(f"  → Processing composite task from {msg_from}")
+        
+        try:
+            content = json.loads(msg.content)
+            file_path = content.get('file_path', '/tmp/test.txt')
+            
+            # Step 1: Do Python processing
+            python_result = {
+                "processed_by": "python",
+                "timestamp": datetime.now().isoformat(),
+                "file_path": file_path
+            }
+            
+            # Step 2: Call Java worker to get file info
+            print(f"  → Calling Java worker for file info...")
+            try:
+                java_response = self.call_worker(
+                    target_worker='java-simple-worker',
+                    capability='read_file_info',
+                    params={'filePath': file_path},  # Match Java's expected field name
+                    timeout=10
+                )
+                
+                # Combine results
+                response_data = {
+                    "python_processing": python_result,
+                    "java_file_info": java_response,
+                    "combined_status": "success",
+                    "worker_id": self.worker_id,
+                    "timestamp": datetime.now().isoformat()
+                }
+                
+                return json.dumps(response_data)
+                
+            except Exception as e:
+                # If Java worker call fails, still return partial result
+                response_data = {
+                    "python_processing": python_result,
+                    "java_call_error": str(e),
+                    "combined_status": "partial",
+                    "worker_id": self.worker_id,
+                    "timestamp": datetime.now().isoformat()
+                }
+                return json.dumps(response_data)
+            
+        except Exception as e:
+            error_data = {
+                "error": str(e),
+                "status": "failed",
+                "worker_id": self.worker_id
+            }
+            return json.dumps(error_data)
+    
+    def call_worker(self, target_worker, capability, params, timeout=30):
+        """
+        Call another worker's capability through Hub
+        
+        Args:
+            target_worker: ID of the target worker (e.g., 'java-simple-worker')
+            capability: Capability name to call (e.g., 'read_file_info')
+            params: Dictionary of parameters to send
+            timeout: Timeout in seconds (default 30)
+        
+        Returns:
+            Dictionary with response data
+        
+        Raises:
+            TimeoutError: If no response within timeout
+            Exception: If error response received
+        """
+        if not hasattr(self, 'send_queue'):
+            raise RuntimeError("Worker not connected. Call connect_and_run() first")
+        
+        request_id = str(uuid.uuid4())
+        
+        print(f"🔗 Calling worker '{target_worker}' capability '{capability}'")
+        
+        # Create worker call message
+        call_msg = hub_pb2.Message(
+            id=request_id,
+            to=target_worker,
+            channel=capability,
+            content=json.dumps(params),
+            timestamp=datetime.now().isoformat(),
+            type=hub_pb2.WORKER_CALL  # Use new message type
+        )
+        setattr(call_msg, 'from', self.worker_id)
+        call_msg.metadata['capability'] = capability
+        
+        # Register pending call
+        response_event = threading.Event()
+        response_data = {'response': None, 'error': None}
+        
+        with self.pending_lock:
+            self.pending_calls[request_id] = {
+                'event': response_event,
+                'data': response_data
+            }
+            print(f"  → Registered pending call {request_id}")
+            print(f"  → Total pending calls after register: {len(self.pending_calls)}")
+            print(f"  → All pending call IDs: {list(self.pending_calls.keys())}")
+        
+        # Send the call
+        self.send_queue.put(call_msg)
+        print(f"  → Sent WORKER_CALL message with ID {request_id}")
+        
+        # Wait for response
+        print(f"  → Waiting for response (timeout: {timeout}s)...")
+        if response_event.wait(timeout=timeout):
+            print(f"  → Response event received for {request_id}")
+            with self.pending_lock:
+                removed = self.pending_calls.pop(request_id, None)
+                print(f"  → Removed pending call {request_id}: {removed is not None}")
+            
+            if response_data['error']:
+                raise Exception(response_data['error'])
+            
+            return response_data['response']
+        else:
+            # Timeout
+            with self.pending_lock:
+                self.pending_calls.pop(request_id, None)
+            raise TimeoutError(f"No response from {target_worker} after {timeout}s")
+    
+    def _handle_worker_call_response(self, msg):
+        """Handle response from worker-to-worker call"""
+        # Get request ID from metadata to match with pending call
+        request_id = msg.metadata.get('request_id', '')
+        
+        print(f"  → Checking response for request_id: {request_id}")
+        print(f"     Message ID: {msg.id}, From: {getattr(msg, 'from', 'unknown')}, Type: {msg.type}")
+        print(f"     Message metadata: {dict(msg.metadata)}")
+        
+        with self.pending_lock:
+            print(f"     Current pending calls: {list(self.pending_calls.keys())}")
+            if request_id and request_id in self.pending_calls:
+                # Found matching pending call
+                call_info = self.pending_calls[request_id]
+                try:
+                    response_content = json.loads(msg.content)
+                    call_info['data']['response'] = response_content
+                    call_info['event'].set()
+                    print(f"  ✓ Matched and completed pending call {request_id}")
+                except Exception as e:
+                    call_info['data']['error'] = f"Failed to parse response: {e}"
+                    call_info['event'].set()
+                    print(f"  ✗ Error parsing response: {e}")
+            else:
+                # No matching pending call - might be a regular response
+                print(f"  ⚠️  No pending call found for request_id: {request_id}")
+                print(f"     Available pending calls: {list(self.pending_calls.keys())}")
+    
     def process_message(self, msg):
         """Process incoming message and return response content"""
         # Use channel field directly (simple and working)
@@ -88,6 +250,8 @@ class PythonWorker:
             return self.handle_hello(msg)
         elif channel == 'analyze_image':
             return self.handle_image_analysis(msg)
+        elif channel == 'composite_task':
+            return self.handle_composite_task(msg)
         else:
             error = {
                 "error": f"Unknown request type: {channel}",
@@ -185,6 +349,7 @@ class PythonWorker:
             import queue
             import threading
             send_queue = queue.Queue()
+            self.send_queue = send_queue  # Make accessible for call_worker method
             
             # Generator function for sending messages
             def request_generator():
@@ -207,6 +372,14 @@ class PythonWorker:
                             "http_method": "POST",
                             "accepts_file": True,
                             "file_field_name": "file"
+                        },
+                        {
+                            "name": "composite_task",
+                            "description": "Demo: Python processing + calls Java worker for file info",
+                            "input_schema": "{\"type\":\"object\",\"properties\":{\"file_path\":{\"type\":\"string\"}}}",
+                            "output_schema": "{\"type\":\"object\",\"properties\":{\"python_processing\":{\"type\":\"object\"},\"java_file_info\":{\"type\":\"object\"}}}",
+                            "http_method": "POST",
+                            "accepts_file": False
                         }
                     ]
                     
@@ -274,29 +447,56 @@ class PythonWorker:
                             
                         try:
                             msg_from = getattr(msg, 'from')  # Get 'from' field
-                            print(f"📬 Received request:")
+                            msg_type = msg.type
+                            
+                            print(f"📬 Received message:")
                             print(f"   ID: {msg.id}")
                             print(f"   From: {msg_from}")
+                            print(f"   Type: {msg_type}")
                             print(f"   Channel: {msg.channel}")
                             
-                            # Process the message
-                            response_content = self.process_message(msg)
-                            
-                            # Create response
-                            response_msg = hub_pb2.Message(
-                                id=f"resp-{int(time.time() * 1000000)}",
-                                to=msg_from,  # Send back to sender
-                                channel=msg.channel,
-                                content=response_content,
-                                timestamp=datetime.now().isoformat(),
-                                type=hub_pb2.DIRECT
-                            )
-                            # Set 'from' field
-                            setattr(response_msg, 'from', self.worker_id)
-                            
-                            # Put response in send queue
-                            send_queue.put(response_msg)
-                            print(f"   ✓ Queued response for {msg_from}\n")
+                            # Handle different message types
+                            if msg_type == hub_pb2.RESPONSE:
+                                # This is a response (possibly from worker-to-worker call)
+                                print(f"   → Response message")
+                                self._handle_worker_call_response(msg)
+                                # Don't send another response for RESPONSE messages
+                                continue
+                                
+                            elif msg_type == hub_pb2.WORKER_CALL:
+                                # Another worker is calling us
+                                print(f"   → Worker call from {msg_from}")
+                                # Process and send response
+                                response_content = self.process_message(msg)
+                                
+                                response_msg = hub_pb2.Message(
+                                    id=f"resp-{int(time.time() * 1000000)}",
+                                    to=msg_from,
+                                    channel=msg.channel,
+                                    content=response_content,
+                                    timestamp=datetime.now().isoformat(),
+                                    type=hub_pb2.RESPONSE  # Mark as RESPONSE
+                                )
+                                setattr(response_msg, 'from', self.worker_id)
+                                send_queue.put(response_msg)
+                                print(f"   ✓ Queued response for worker call\n")
+                                
+                            else:
+                                # Regular REQUEST or other message types
+                                print(f"   → Regular request")
+                                response_content = self.process_message(msg)
+                                
+                                response_msg = hub_pb2.Message(
+                                    id=f"resp-{int(time.time() * 1000000)}",
+                                    to=msg_from,
+                                    channel=msg.channel,
+                                    content=response_content,
+                                    timestamp=datetime.now().isoformat(),
+                                    type=hub_pb2.RESPONSE
+                                )
+                                setattr(response_msg, 'from', self.worker_id)
+                                send_queue.put(response_msg)
+                                print(f"   ✓ Queued response for {msg_from}\n")
                             
                         except Exception as e:
                             print(f"✗ Error processing message: {e}")

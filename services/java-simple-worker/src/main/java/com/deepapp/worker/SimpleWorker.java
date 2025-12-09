@@ -30,6 +30,14 @@ public class SimpleWorker {
     private final Map<String, CapabilityHandler> handlers;
     private final ObjectMapper objectMapper;
     private StreamObserver<Message> requestObserver;
+    private final Map<String, PendingCall> pendingCalls;  // Track worker-to-worker calls
+
+    // Helper class for pending calls
+    private static class PendingCall {
+        final Object lock = new Object();
+        Message response = null;
+        boolean completed = false;
+    }
 
     public SimpleWorker(String workerId, String hubAddress) {
         this.workerId = workerId;
@@ -57,6 +65,7 @@ public class SimpleWorker {
         this.asyncStub = HubServiceGrpc.newStub(channel);
         this.handlers = new ConcurrentHashMap<>();
         this.objectMapper = new ObjectMapper();
+        this.pendingCalls = new ConcurrentHashMap<>();
 
         // Register capabilities
         registerCapabilities();
@@ -164,11 +173,91 @@ public class SimpleWorker {
         }
     }
 
+    /**
+     * Call another worker's capability through Hub
+     * 
+     * @param targetWorker Target worker ID (e.g., "python-worker")
+     * @param capability Capability name to call
+     * @param params Parameters as JSON string
+     * @param timeoutSeconds Timeout in seconds
+     * @return Response message from the target worker
+     * @throws Exception if call fails or times out
+     */
+    public Message callWorker(String targetWorker, String capability, String params, int timeoutSeconds) throws Exception {
+        String requestId = UUID.randomUUID().toString();
+        
+        logger.info("🔗 Calling worker '{}' capability '{}'", targetWorker, capability);
+        
+        // Create worker call message
+        Message callMessage = Message.newBuilder()
+                .setId(requestId)
+                .setFrom(workerId)
+                .setTo(targetWorker)
+                .setChannel(capability)
+                .setContent(params)
+                .setTimestamp(String.valueOf(System.currentTimeMillis()))
+                .setType(MessageType.WORKER_CALL)
+                .putMetadata("capability", capability)
+                .build();
+        
+        // Register pending call
+        PendingCall pending = new PendingCall();
+        pendingCalls.put(requestId, pending);
+        
+        try {
+            // Send the call
+            requestObserver.onNext(callMessage);
+            
+            // Wait for response
+            synchronized (pending.lock) {
+                long startTime = System.currentTimeMillis();
+                long timeoutMillis = timeoutSeconds * 1000L;
+                
+                while (!pending.completed) {
+                    long elapsed = System.currentTimeMillis() - startTime;
+                    long remaining = timeoutMillis - elapsed;
+                    
+                    if (remaining <= 0) {
+                        throw new Exception("Timeout waiting for response from " + targetWorker);
+                    }
+                    
+                    pending.lock.wait(remaining);
+                }
+            }
+            
+            if (pending.response == null) {
+                throw new Exception("No response received from " + targetWorker);
+            }
+            
+            logger.info("✓ Received response from {}", targetWorker);
+            return pending.response;
+            
+        } finally {
+            pendingCalls.remove(requestId);
+        }
+    }
+
     private void handleMessage(Message message) {
         logger.info("📨 Received message: action='{}', from={}, to={}, type={}, metadata={}", 
                 message.getAction(), message.getFrom(), message.getTo(), 
                 message.getType(), message.getMetadataMap());
 
+        // Handle WORKER_CALL from another worker
+        if (message.getType() == MessageType.WORKER_CALL) {
+            logger.info("🔗 Worker-to-Worker call from {}, capability: {}", 
+                    message.getFrom(), message.getChannel());
+            handleWorkerCall(message);
+            return;
+        }
+
+        // Handle RESPONSE (could be from worker-to-worker call)
+        if (message.getType() == MessageType.RESPONSE) {
+            logger.info("📬 Response from {}", message.getFrom());
+            handleResponse(message);
+            return;
+        }
+
+        // Handle regular REQUEST
         if ("request".equals(message.getAction()) && message.getMetadataMap().containsKey("capability")) {
             String capability = message.getMetadataMap().get("capability");
             logger.info("🔍 Processing capability: {}", capability);
@@ -180,6 +269,86 @@ public class SimpleWorker {
         } else {
             logger.warn("Invalid request format - action='{}', has capability metadata={}", 
                     message.getAction(), message.getMetadataMap().containsKey("capability"));
+        }
+    }
+
+    private void handleWorkerCall(Message message) {
+        // Another worker is calling this worker
+        String capability = message.getChannel();
+        
+        if (!handlers.containsKey(capability)) {
+            logger.warn("Worker call for unknown capability: {}", capability);
+            sendErrorResponse(message, "Capability not found: " + capability);
+            return;
+        }
+
+        try {
+            CapabilityHandler handler = handlers.get(capability);
+            String input = message.getContent();
+            String result = handler.handle(input);
+
+            // Send response back to calling worker
+            Message response = Message.newBuilder()
+                    .setId(UUID.randomUUID().toString())
+                    .setFrom(workerId)
+                    .setTo(message.getFrom())  // Send back to caller
+                    .setChannel(capability)
+                    .setContent(result)
+                    .setTimestamp(String.valueOf(System.currentTimeMillis()))
+                    .setType(MessageType.RESPONSE)
+                    .putMetadata("request_id", message.getId())
+                    .putMetadata("status", "success")
+                    .build();
+
+            requestObserver.onNext(response);
+            logger.info("✓ Sent worker call response to {}", message.getFrom());
+
+        } catch (Exception e) {
+            logger.error("Error handling worker call: {}", e.getMessage(), e);
+            sendErrorResponse(message, "Error: " + e.getMessage());
+        }
+    }
+
+    private void handleResponse(Message message) {
+        // Check if this is a response to our pending call
+        String requestId = message.getMetadataMap().get("request_id");
+        
+        if (requestId != null && pendingCalls.containsKey(requestId)) {
+            PendingCall pending = pendingCalls.get(requestId);
+            synchronized (pending.lock) {
+                pending.response = message;
+                pending.completed = true;
+                pending.lock.notifyAll();
+            }
+            logger.info("✓ Matched response to pending call {}", requestId);
+        } else {
+            logger.debug("Received response without matching pending call");
+        }
+    }
+
+    private void sendErrorResponse(Message originalMessage, String errorMessage) {
+        try {
+            Map<String, String> errorData = new HashMap<>();
+            errorData.put("error", errorMessage);
+            errorData.put("status", "failed");
+            
+            String jsonError = objectMapper.writeValueAsString(errorData);
+            
+            Message response = Message.newBuilder()
+                    .setId(UUID.randomUUID().toString())
+                    .setFrom(workerId)
+                    .setTo(originalMessage.getFrom())
+                    .setChannel(originalMessage.getChannel())
+                    .setContent(jsonError)
+                    .setTimestamp(String.valueOf(System.currentTimeMillis()))
+                    .setType(MessageType.RESPONSE)
+                    .putMetadata("request_id", originalMessage.getId())
+                    .putMetadata("status", "error")
+                    .build();
+
+            requestObserver.onNext(response);
+        } catch (Exception e) {
+            logger.error("Failed to send error response", e);
         }
     }
 
