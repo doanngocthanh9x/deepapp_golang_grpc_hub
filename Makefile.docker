@@ -1,0 +1,64 @@
+.PHONY: help build up down logs clean rebuild
+
+help:
+	@echo "gRPC Hub System - Docker Commands"
+	@echo "=================================="
+	@echo "make build    - Build all Docker images"
+	@echo "make up       - Start all services"
+	@echo "make down     - Stop all services"
+	@echo "make logs     - View logs from all services"
+	@echo "make logs-hub - View Hub logs"
+	@echo "make logs-api - View Web API logs"
+	@echo "make logs-worker - View Worker logs"
+	@echo "make clean    - Remove containers and volumes"
+	@echo "make rebuild  - Rebuild and restart everything"
+	@echo "make test     - Test the system"
+
+build:
+	@echo "Building Docker images..."
+	docker-compose build
+
+up:
+	@echo "Starting services..."
+	docker-compose up -d
+	@echo ""
+	@echo "Services started!"
+	@echo "  - gRPC Hub:  localhost:50051"
+	@echo "  - Web API:   http://localhost:8081"
+	@echo ""
+	@echo "View logs: make logs"
+	@echo "Test API:  make test"
+
+down:
+	@echo "Stopping services..."
+	docker-compose down
+
+logs:
+	docker-compose logs -f
+
+logs-hub:
+	docker-compose logs -f hub
+
+logs-api:
+	docker-compose logs -f webapi
+
+logs-worker:
+	docker-compose logs -f worker
+
+clean:
+	@echo "Cleaning up..."
+	docker-compose down -v
+	docker system prune -f
+
+rebuild: clean build up
+
+test:
+	@echo "Testing hello endpoint..."
+	@curl -s -X POST http://localhost:8081/api/hello | jq '.' || curl -s -X POST http://localhost:8081/api/hello
+	@echo ""
+	@echo "Testing status endpoint..."
+	@curl -s http://localhost:8081/api/status | jq '.' || curl -s http://localhost:8081/api/status
+
+status:
+	@echo "Service Status:"
+	@docker-compose ps

@@ -1,0 +1,21 @@
+FROM python:3.10-slim
+
+WORKDIR /app
+
+# Add build argument to force rebuild
+ARG CACHEBUST=1
+
+# Install dependencies
+COPY services/python-worker/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy worker code and proto files with timestamp to ensure fresh build
+RUN echo "Building at $(date +%s)"
+COPY services/python-worker/*.py ./
+
+# Environment variables
+ENV HUB_ADDRESS=hub:50051
+ENV WORKER_ID=python-worker
+
+# Run the worker
+CMD ["python", "-u", "worker_grpc.py"]

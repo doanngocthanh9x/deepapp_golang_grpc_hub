@@ -1,0 +1,79 @@
+basePath: /api/v2
+host: localhost:8082
+info:
+  contact: {}
+  description: Dynamic API Gateway với auto-discovery từ workers
+  title: gRPC Hub Dynamic API
+  version: "2.0"
+paths:
+  /capabilities:
+    get:
+      description: Get all service capabilities registered by workers
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: List all available capabilities
+      tags:
+      - discovery
+  /invoke/{capability}:
+    post:
+      consumes:
+      - application/json
+      description: Dynamically invoke any registered service capability
+      parameters:
+      - description: Capability name
+        example: hello
+        in: path
+        name: capability
+        required: true
+        type: string
+      - description: Request payload
+        in: body
+        name: request
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Invoke a service capability
+      tags:
+      - services
+  /status:
+    get:
+      description: Get current API gateway status and info
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get API status
+      tags:
+      - system
+swagger: "2.0"

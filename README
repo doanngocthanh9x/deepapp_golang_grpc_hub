@@ -1,0 +1,50 @@
+deepapp_golang_grpc_hub/
+│
+├── cmd/
+│   └── hub/
+│       └── main.go                  # Entry point chạy server
+│
+├── internal/
+│   ├── config/
+│   │   └── config.go                # Load env, config app
+│   │
+│   ├── hub/
+│   │   ├── server.go                # gRPC Stream implementation
+│   │   ├── connection.go            # Connection manager (map client->stream)
+│   │   ├── router.go                # Route direct, broadcast, channel publish
+│   │   ├── subscriber.go            # Channel subscriber manager
+│   │   ├── dispatcher.go            # Queue dispatch (optional)
+│   │   └── handler.go               # Handle Request types: json/file/control
+│   │
+│   ├── proto/                       # Generated code từ .proto
+│   │   └── hub.pb.go
+│   │
+│   ├── repository/
+│   │   ├── messages_repo.go         # Lưu & đọc message từ SQLite
+│   │   └── clients_repo.go          # Lưu trạng thái client (optional persist)
+│   │
+│   ├── models/
+│   │   ├── message.go               # Struct để bind DB
+│   │   └── client.go
+│   │
+│   ├── db/
+│   │   ├── sqlite.go                # Init + kết nối DB
+│   │   └── migrations/
+│   │       ├── 001_create_messages.sql
+│   │       └── 002_create_clients.sql
+│   │
+│   └── utils/
+│       ├── json.go                  # Convert Struct <-> JSON
+│       ├── id.go                    # message_id generator (uuid)
+│       └── time.go
+│
+├── pkg/
+│   └── logger/                      # Logger singleton (zap/logrus)
+│       └── logger.go
+│
+├── proto/
+│   └── hub.proto                    # File proto nguồn
+│
+├── Makefile                         # generate proto, run server
+├── go.mod
+└── README.md

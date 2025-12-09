@@ -1,0 +1,6 @@
+/home/vps1/WorkSpace/deepapp_golang_grpc_hub/services/java-simple-worker/src/main/java/com/deepapp/worker/HelloWorldHandler.java
+/home/vps1/WorkSpace/deepapp_golang_grpc_hub/services/java-simple-worker/src/main/java/com/deepapp/worker/SimpleWorker.java
+/home/vps1/WorkSpace/deepapp_golang_grpc_hub/services/java-simple-worker/src/main/java/com/deepapp/worker/CapabilityHandler.java
+/home/vps1/WorkSpace/deepapp_golang_grpc_hub/services/java-simple-worker/target/generated-sources/protobuf/java/com/deepapp/hub/Hub.java
+/home/vps1/WorkSpace/deepapp_golang_grpc_hub/services/java-simple-worker/target/generated-sources/protobuf/grpc-java/com/deepapp/hub/HubServiceGrpc.java
+/home/vps1/WorkSpace/deepapp_golang_grpc_hub/services/java-simple-worker/src/main/java/com/deepapp/worker/FileInfoHandler.java

@@ -1,0 +1,21 @@
+cd /home/vps1/WorkSpace/deepapp_golang_grpc_hub/services/web-api-v2 && go build -o ../../bin/web-api-v2 && echo "✅ API rebuilt"
+
+pkill -9 -f "web-api-v2" ; sleep 2 && cd /home/vps1/WorkSpace/deepapp_golang_grpc_hub && HUB_ADDRESS=localhost:50052 PORT=8082 ./bin/web-api-v2 > /tmp/api_dynamic.log 2>&1 &
+
+
+
+/home/vps1/WorkSpace/deepapp_golang_grpc_hub && docker-compose -f docker-compose.all-in-one.yml build --no-cache
+cd /home/vps1/WorkSpace/deepapp_golang_grpc_hub && docker exec deepapp-hub-all-in-one tail -20 /var/log/supervisor/python-worker.out.log
+
+cd /home/vps1/WorkSpace/deepapp_golang_grpc_hub && export CACHEBUST=$(date +%s) && docker-compose -f docker-compose.all-in-one.yml build && docker-compose -f docker-compose.all-in-one.yml down && docker-compose -f docker-compose.all-in-one.yml up -d
+
+
+```
+cd /home/vps1/WorkSpace/deepapp_golang_grpc_hub && docker-compose -f docker-compose.all-in-one.yml down && docker-compose -f docker-compose.all-in-one.yml up -d
+```
+
+
+vps1@vps1:~/WorkSpace/deepapp_golang_grpc_hub$ cd /home/vps1/WorkSpace/deepapp_golang_grpc_hub && python3 -m grpc_tools.protoc -I./proto --python_out=./services/python-worker --grpc_python_out=./services/python-worker ./proto/hub.proto
+
+
+cd /home/vps1/WorkSpace/deepapp_golang_grpc_hub && docker-compose -f docker-compose.all-in-one.yml build --build-arg CACHEBUST=$(date +%s)

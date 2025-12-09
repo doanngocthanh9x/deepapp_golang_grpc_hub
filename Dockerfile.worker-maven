@@ -1,0 +1,31 @@
+# Java Maven Worker using Eclipse Temurin JDK
+FROM eclipse-temurin:17-jdk
+
+# Install Maven
+RUN apt-get update && \
+    apt-get install -y maven && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy pom.xml first for better caching
+COPY services/java-maven-worker/pom.xml .
+
+# Download dependencies (this layer will be cached if pom.xml doesn't change)
+RUN mvn dependency:go-offline -B
+
+# Copy source code
+COPY services/java-maven-worker/src ./src
+
+# Copy proto files for generation
+COPY proto ./services/java-maven-worker/proto
+
+# Build the application
+RUN mvn clean package -DskipTests
+
+# Set environment variables
+ENV HUB_ADDRESS=localhost:50051
+ENV WORKER_ID=java-maven-worker
+
+# Run the application
+CMD ["java", "-jar", "target/java-maven-worker-1.0.0.jar"]

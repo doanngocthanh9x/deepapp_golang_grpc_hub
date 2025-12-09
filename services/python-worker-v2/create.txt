@@ -1,0 +1,7 @@
+cd /home/vps1/WorkSpace/deepapp_golang_grpc_hub && /home/vps1/.venv/bin/python -m grpc_tools.protoc --python_out=internal/proto --grpc_python_out=internal/proto proto/hub.proto
+
+cd /home/vps1/WorkSpace/deepapp_golang_grpc_hub && /home/vps1/.venv/bin/python -m grpc_tools.protoc --proto_path=proto --python_out=internal/proto --grpc_python_out=internal/proto proto/hub.proto
+
+cd /home/vps1/WorkSpace/deepapp_golang_grpc_hub/services/python-worker-v2 && /home/vps1/.venv/bin/pip install --upgrade grpcio-tools protobuf
+
+cd /home/vps1/WorkSpace/deepapp_golang_grpc_hub/services/python-worker-v2 && /home/vps1/.venv/bin/pip install grpcio-tools protobuf --upgrade

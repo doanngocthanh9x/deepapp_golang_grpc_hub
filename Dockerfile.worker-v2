@@ -1,0 +1,28 @@
+# Use Python 3.10 slim image
+FROM python:3.10-slim
+
+WORKDIR /app
+
+# Install required system packages
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements
+COPY services/python-worker-v2/requirements.txt .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy proto files
+COPY internal/proto/*.py ./
+
+# Copy worker script
+COPY services/python-worker-v2/worker_dynamic.py .
+
+# Set environment variables
+ENV HUB_ADDRESS=localhost:50051
+ENV WORKER_ID=py-worker-dynamic
+ENV PYTHONUNBUFFERED=1
+
+CMD ["python", "worker_dynamic.py"]

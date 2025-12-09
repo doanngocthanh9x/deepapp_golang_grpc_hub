@@ -1,0 +1,33 @@
+# Build stage
+FROM golang:1.18-alpine AS builder
+
+WORKDIR /app
+
+# Add build argument to force rebuild
+ARG CACHEBUST=1
+
+# Copy go mod files
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy source code
+COPY . .
+
+# Build the hub binary with timestamp to ensure fresh build
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags="-X main.BuildTime=$(date +%s)" -o hub cmd/hub/main.go
+
+# Runtime stage
+FROM alpine:latest
+
+RUN apk --no-cache add ca-certificates
+
+WORKDIR /root/
+
+# Copy binary from builder
+COPY --from=builder /app/hub .
+
+# Expose gRPC port
+EXPOSE 50051
+
+# Run the hub
+CMD ["./hub"]

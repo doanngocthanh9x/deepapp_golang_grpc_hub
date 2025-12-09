@@ -1,0 +1,112 @@
+version: '3.8'
+
+services:
+  # gRPC Hub - Message routing server
+  hub:
+    build:
+      context: .
+      dockerfile: Dockerfile.hub
+      args:
+        CACHEBUST: ${CACHEBUST:-1}
+    container_name: grpc-hub
+    ports:
+      - "50051:50051"
+    networks:
+      - grpc-network
+    environment:
+      - PORT=50051
+      - LOG_LEVEL=info
+      - DB_PATH=/data/hub.db
+    volumes:
+      - hub-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "50051"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Python Worker - Task processor
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+      args:
+        CACHEBUST: ${CACHEBUST:-1}
+    container_name: python-worker
+    depends_on:
+      hub:
+        condition: service_healthy
+    networks:
+      - grpc-network
+    environment:
+      - HUB_ADDRESS=hub:50051
+      - WORKER_ID=python-worker
+    restart: unless-stopped
+
+  # # Java Maven Worker - Java/Maven task processor
+  # java-worker:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.worker-maven-v1
+  #   container_name: java-maven-worker
+  #   depends_on:
+  #     hub:
+  #       condition: service_healthy
+  #   networks:
+  #     - grpc-network
+  #   environment:
+  #     - HUB_ADDRESS=hub:50051
+  #     - WORKER_ID=java-maven-worker
+  #   restart: unless-stopped
+
+  # Java Simple Worker - Basic capabilities
+  java-simple-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker-simple
+      args:
+        CACHEBUST: ${CACHEBUST:-1}
+    container_name: java-simple-worker
+    depends_on:
+      hub:
+        condition: service_healthy
+    networks:
+      - grpc-network
+    environment:
+      - HUB_ADDRESS=hub:50051
+      - WORKER_ID=java-simple-worker
+    restart: unless-stopped
+
+  # Web API - HTTP to gRPC gateway
+  webapi:
+    build:
+      context: .
+      dockerfile: Dockerfile.webapi
+      args:
+        CACHEBUST: ${CACHEBUST:-1}
+    container_name: web-api
+    depends_on:
+      hub:
+        condition: service_healthy
+    ports:
+      - "8081:8081"
+    networks:
+      - grpc-network
+    environment:
+      - HUB_ADDRESS=hub:50051
+      - PORT=8081
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8081/api/status"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+networks:
+  grpc-network:
+    driver: bridge
+
+volumes:
+  hub-data:
+    driver: local

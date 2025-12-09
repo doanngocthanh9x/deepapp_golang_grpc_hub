@@ -1,0 +1,25 @@
+{
+  "name": "deepapp-grpc-hub-nodejs-sdk",
+  "version": "1.0.0",
+  "description": "Node.js SDK for creating workers in the DeepApp gRPC Hub system",
+  "main": "worker-sdk.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "grpc",
+    "worker",
+    "hub",
+    "deepapp",
+    "sdk"
+  ],
+  "author": "DeepApp Team",
+  "license": "MIT",
+  "dependencies": {
+    "@grpc/grpc-js": "^1.8.0",
+    "@grpc/proto-loader": "^0.7.0"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}

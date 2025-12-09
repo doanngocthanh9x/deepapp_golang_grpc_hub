@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  # All-in-one container with Hub, Workers, and Web API
+  deepapp-hub:
+    build:
+      context: .
+      dockerfile: Dockerfile.all-in-one
+      args:
+        # Change this value to force rebuild without cache
+        CACHEBUST: ${CACHEBUST:-1}
+    container_name: deepapp-hub-all-in-one
+    ports:
+      - "8081:8081"  # Only Web API is exposed
+    volumes:
+      - hub-data:/data  # Persist Hub database
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8081/api/status"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    environment:
+      # Hub settings
+      - PORT=50051
+      - LOG_LEVEL=info
+      - DB_PATH=/data/hub.db
+      # All services communicate via localhost internally
+
+volumes:
+  hub-data:
+    driver: local

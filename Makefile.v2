@@ -1,0 +1,84 @@
+.PHONY: help install-swag swagger build run proto
+
+help: ## Show this help
+	@echo "Available targets:"
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-20s %s\n", $$1, $$2}'
+
+install-swag: ## Install swag CLI tool
+	@echo "Installing swag..."
+	go install github.com/swaggo/swag/cmd/swag@v1.16.2
+
+swagger: ## Generate Swagger documentation
+	@echo "Generating Swagger docs..."
+	cd services/web-api-v2 && swag init -g main.go -o docs --parseDependency
+
+proto: ## Regenerate protobuf (if needed)
+	@echo "Generating protobuf..."
+	protoc --go_out=. --go-grpc_out=. proto/hub.proto
+
+build-hub: ## Build Hub server
+	@echo "Building Hub..."
+	cd cmd/hub && go build -o ../../bin/hub
+
+build-api-v2: swagger ## Build Web API v2
+	@echo "Building Web API v2..."
+	cd services/web-api-v2 && go build -o ../../bin/web-api-v2
+
+build-worker-v2: ## Build Python Worker v2
+	@echo "Installing Python dependencies..."
+	cd services/python-worker-v2 && pip install -r requirements.txt
+
+build: build-hub build-api-v2 build-worker-v2 ## Build all services
+
+run-hub: ## Run Hub server
+	@echo "Starting Hub..."
+	./bin/hub
+
+run-api-v2: ## Run Web API v2
+	@echo "Starting Web API v2..."
+	HUB_ADDRESS=localhost:50051 PORT=8082 ./bin/web-api-v2
+
+run-worker-v2: ## Run Python Worker v2
+	@echo "Starting Python Worker v2..."
+	cd services/python-worker-v2 && HUB_ADDRESS=localhost:50051 python worker_dynamic.py
+
+run-maven-worker: ## Run Java Maven Worker
+	@echo "Starting Java Maven Worker..."
+	cd services/java-maven-worker && mvn exec:java -Dexec.mainClass="com.deepapp.worker.MavenWorker" -Dexec.args="--hub localhost:50051"
+
+build-maven-worker: ## Build Java Maven Worker
+	@echo "Building Java Maven Worker..."
+	cd services/java-maven-worker && mvn clean package
+
+docker-build-maven: ## Build Maven Worker Docker image
+	@echo "Building Maven Worker Docker image..."
+	docker build -f Dockerfile.worker-maven -t java-maven-worker .
+
+docker-build: ## Build Docker images
+	@echo "Building Docker images..."
+	docker-compose -f docker-compose-v2.yml build
+
+docker-up: ## Start Docker containers
+	@echo "Starting Docker containers..."
+	docker-compose -f docker-compose-v2.yml up -d
+
+docker-down: ## Stop Docker containers
+	@echo "Stopping Docker containers..."
+	docker-compose -f docker-compose-v2.yml down
+
+docker-logs: ## Show Docker logs
+	docker-compose -f docker-compose-v2.yml logs -f
+
+test-api: ## Test API endpoints
+	@echo "Testing status endpoint..."
+	curl -s http://localhost:8082/api/v2/status | jq
+	@echo "\nTesting capabilities endpoint..."
+	curl -s http://localhost:8082/api/v2/capabilities | jq
+	@echo "\nTesting hello capability..."
+	curl -s -X POST http://localhost:8082/api/v2/invoke/hello \
+		-H "Content-Type: application/json" \
+		-d '{"name":"Dynamic System"}' | jq
+
+clean: ## Clean build artifacts
+	rm -rf bin/
+	rm -rf services/web-api-v2/docs/

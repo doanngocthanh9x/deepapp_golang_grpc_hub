@@ -1,0 +1,149 @@
+# Multi-stage build for all services in one container
+# Stage 1: Build Go services (Hub + Web API)
+FROM golang:1.18-alpine AS go-builder
+
+# Install build dependencies for CGO (needed for SQLite)
+RUN apk add --no-cache gcc musl-dev
+
+WORKDIR /app
+
+# Copy go mod files and download dependencies (CACHED)
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy source code (NOT CACHED - use build arg)
+ARG CACHEBUST=1
+COPY . .
+
+# Build Hub (enable CGO for SQLite)
+RUN CGO_ENABLED=1 GOOS=linux go build -a \
+    -ldflags="-X main.BuildTime=$(date +%s)" \
+    -o hub cmd/hub/main.go
+
+# Build Web API (build entire package, not just main.go)
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo \
+    -ldflags="-X main.BuildTime=$(date +%s)" \
+    -o webapi ./services/web-api
+
+# Stage 2: Build Java Worker
+FROM eclipse-temurin:17-jdk AS java-builder
+
+# Install Maven (CACHED)
+RUN apt-get update && \
+    apt-get install -y maven && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy pom.xml and download dependencies (CACHED)
+COPY services/java-simple-worker/pom.xml ./pom.xml
+COPY proto ./proto
+RUN mvn dependency:go-offline -B
+
+# Copy source code (NOT CACHED - use build arg)
+ARG CACHEBUST=1
+COPY services/java-simple-worker/src ./src
+
+# Build Java application
+RUN echo "Building Java at $(date +%s)" && mvn clean package -DskipTests
+
+# Stage 3: Python Worker preparation
+FROM python:3.10-alpine AS python-builder
+
+WORKDIR /app
+
+# Install build dependencies for Python packages with C extensions
+RUN apk add --no-cache gcc musl-dev linux-headers
+
+# Install dependencies (CACHED)
+COPY services/python-worker/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Stage 4: Final runtime image with all services
+FROM python:3.10-alpine
+
+# Install Java Runtime (for Java worker) and supervisor (for process management)
+RUN apk add --no-cache openjdk21-jre supervisor netcat-openbsd wget
+
+WORKDIR /app
+
+# Copy Python dependencies from builder
+COPY --from=python-builder /usr/local/lib/python3.10/site-packages /usr/local/lib/python3.10/site-packages
+
+# Copy Go binaries from go-builder
+COPY --from=go-builder /app/hub /usr/local/bin/hub
+COPY --from=go-builder /app/webapi /usr/local/bin/webapi
+
+# Copy Java JAR from java-builder
+COPY --from=java-builder /app/target/java-simple-worker-1.0.0.jar /app/java-worker.jar
+
+# Copy Python worker code (NOT CACHED - use build arg)
+ARG CACHEBUST=1
+RUN echo "Copying Python code at $(date +%s)"
+COPY services/python-worker/*.py /app/python-worker/
+
+# Create supervisor configuration
+RUN mkdir -p /etc/supervisor/conf.d /var/log/supervisor /data
+
+# Create supervisor config file
+COPY <<'EOF' /etc/supervisor/conf.d/supervisord.conf
+[supervisord]
+nodaemon=true
+user=root
+logfile=/var/log/supervisor/supervisord.log
+pidfile=/var/run/supervisord.pid
+
+[program:hub]
+command=/usr/local/bin/hub
+autostart=true
+autorestart=true
+stderr_logfile=/var/log/supervisor/hub.err.log
+stdout_logfile=/var/log/supervisor/hub.out.log
+environment=PORT=50051,LOG_LEVEL=info,DB_PATH=/data/hub.db
+priority=10
+
+[program:python-worker]
+command=python3 -u /app/python-worker/worker_grpc.py
+directory=/app/python-worker
+autostart=true
+autorestart=true
+stderr_logfile=/var/log/supervisor/python-worker.err.log
+stdout_logfile=/var/log/supervisor/python-worker.out.log
+environment=HUB_ADDRESS=localhost:50051,WORKER_ID=python-worker
+priority=20
+startsecs=5
+
+[program:java-worker]
+command=java -jar /app/java-worker.jar
+directory=/app
+autostart=true
+autorestart=true
+stderr_logfile=/var/log/supervisor/java-worker.err.log
+stdout_logfile=/var/log/supervisor/java-worker.out.log
+environment=HUB_ADDRESS=localhost:50051,WORKER_ID=java-simple-worker
+priority=20
+startsecs=5
+
+[program:webapi]
+command=/usr/local/bin/webapi
+autostart=true
+autorestart=true
+stderr_logfile=/var/log/supervisor/webapi.err.log
+stdout_logfile=/var/log/supervisor/webapi.out.log
+environment=HUB_ADDRESS=localhost:50051,PORT=8081
+priority=30
+startsecs=10
+EOF
+
+# Expose only Web API port
+EXPOSE 8081
+
+# Health check for Web API
+HEALTHCHECK --interval=10s --timeout=5s --retries=3 \
+  CMD wget --quiet --tries=1 --spider http://localhost:8081/api/status || exit 1
+
+# Create volume for Hub data
+VOLUME ["/data"]
+
+# Start supervisor to manage all services
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
