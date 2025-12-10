@@ -14,14 +14,15 @@ import (
 )
 
 type Server struct {
-	config     *config.Config
-	server     *grpc.Server
-	connMgr    *ConnectionManager
-	router     *Router
-	subMgr     *SubscriberManager
-	dispatcher *Dispatcher
-	handler    *Handler
-	registry   *ServiceRegistry // Service registry with DB persistence
+	config         *config.Config
+	server         *grpc.Server
+	connMgr        *ConnectionManager
+	router         *Router
+	subMgr         *SubscriberManager
+	dispatcher     *Dispatcher
+	handler        *Handler
+	registry       *ServiceRegistry // Service registry with DB persistence
+	requestTracker *RequestTracker  // Track request_id to requester mapping
 }
 
 func NewServer(cfg *config.Config) *Server {
@@ -31,6 +32,8 @@ func NewServer(cfg *config.Config) *Server {
 	subMgr := NewSubscriberManager()
 	fmt.Println("Creating ServiceRegistry...")
 	registry := NewServiceRegistry()
+	fmt.Println("Creating RequestTracker...")
+	requestTracker := NewRequestTracker()
 	fmt.Println("Creating Router...")
 	router := NewRouter(connMgr, subMgr)
 	fmt.Println("Creating Dispatcher...")
@@ -40,14 +43,15 @@ func NewServer(cfg *config.Config) *Server {
 
 	fmt.Println("Creating gRPC server...")
 	s := &Server{
-		config:     cfg,
-		server:     grpc.NewServer(),
-		connMgr:    connMgr,
-		router:     router,
-		subMgr:     subMgr,
-		dispatcher: dispatcher,
-		handler:    handler,
-		registry:   registry,
+		config:         cfg,
+		server:         grpc.NewServer(),
+		connMgr:        connMgr,
+		router:         router,
+		subMgr:         subMgr,
+		dispatcher:     dispatcher,
+		handler:        handler,
+		registry:       registry,
+		requestTracker: requestTracker,
 	}
 
 	fmt.Println("Registering HubService...")
@@ -64,6 +68,8 @@ func NewServerWithRegistry(cfg *config.Config, registry *ServiceRegistry) *Serve
 	connMgr := NewConnectionManager()
 	fmt.Println("Creating SubscriberManager...")
 	subMgr := NewSubscriberManager()
+	fmt.Println("Creating RequestTracker...")
+	requestTracker := NewRequestTracker()
 	fmt.Println("Creating Router...")
 	router := NewRouter(connMgr, subMgr)
 	fmt.Println("Creating Dispatcher...")
@@ -73,14 +79,15 @@ func NewServerWithRegistry(cfg *config.Config, registry *ServiceRegistry) *Serve
 
 	fmt.Println("Creating gRPC server...")
 	s := &Server{
-		config:     cfg,
-		server:     grpc.NewServer(),
-		connMgr:    connMgr,
-		router:     router,
-		subMgr:     subMgr,
-		dispatcher: dispatcher,
-		handler:    handler,
-		registry:   registry,
+		config:         cfg,
+		server:         grpc.NewServer(),
+		connMgr:        connMgr,
+		router:         router,
+		subMgr:         subMgr,
+		dispatcher:     dispatcher,
+		handler:        handler,
+		registry:       registry,
+		requestTracker: requestTracker,
 	}
 
 	fmt.Println("Registering HubService...")

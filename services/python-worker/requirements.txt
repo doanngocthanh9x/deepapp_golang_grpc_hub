@@ -8,3 +8,7 @@ onnxruntime>=1.12.0
 pillow
 pyclipper
 shapely
+shapely
+vietocr
+torch>=1.13.0
+torchvision>=0.14.0

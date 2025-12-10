@@ -2,13 +2,22 @@
 # Stage 1: Build Go services (Hub + Web API)
 FROM golang:1.19-alpine AS go-builder
 
-# Install build dependencies (not needed for pure-Go SQLite)
-RUN apk add --no-cache git
+# Install build dependencies including protobuf
+RUN apk add --no-cache git protobuf protobuf-dev
 
 WORKDIR /app
 
 # Copy source code first to detect all imports
 COPY . .
+
+# Install protoc plugins
+RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28 && \
+    go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2
+
+# Generate proto files with updated hub.proto
+RUN protoc --go_out=./internal/proto --go_opt=paths=source_relative \
+    --go-grpc_out=./internal/proto --go-grpc_opt=paths=source_relative \
+    -I=./proto proto/hub.proto
 
 # Generate go.sum and download all dependencies (including modernc.org/sqlite)
 RUN go mod tidy && go mod download

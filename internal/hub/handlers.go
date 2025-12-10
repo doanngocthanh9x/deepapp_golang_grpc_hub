@@ -98,6 +98,11 @@ func (s *Server) handleCapabilityDiscovery(msg *proto.Message) {
 func (s *Server) handleServiceRequest(msg *proto.Message) {
 	fmt.Printf("📨 Processing service request from %s to %s\n", msg.From, msg.To)
 
+	// Generate request_id if not present
+	if msg.RequestId == "" {
+		msg.RequestId = fmt.Sprintf("req-%d", time.Now().UnixNano())
+	}
+
 	// Check if capability is in metadata
 	capability, hasCapability := msg.Metadata["capability"]
 	
@@ -118,6 +123,11 @@ func (s *Server) handleServiceRequest(msg *proto.Message) {
 	// If To field is already set, route directly
 	if msg.To != "" && msg.To != "hub" {
 		fmt.Printf("🎯 Routing request to specified worker: %s (capability: %s)\n", msg.To, capability)
+		
+		// Track request
+		s.requestTracker.Track(msg.RequestId, msg.From, msg.To, capability)
+		fmt.Printf("📝 Tracking request %s: %s → %s\n", msg.RequestId, msg.From, msg.To)
+		
 		s.dispatcher.Dispatch(msg)
 		return
 	}
@@ -130,6 +140,7 @@ func (s *Server) handleServiceRequest(msg *proto.Message) {
 		// Send error response
 		errorMsg := &proto.Message{
 			Id:        msg.Id,
+			RequestId: msg.RequestId,
 			From:      "hub",
 			To:        msg.From,
 			Type:      proto.MessageType_RESPONSE,
@@ -141,6 +152,10 @@ func (s *Server) handleServiceRequest(msg *proto.Message) {
 	}
 
 	fmt.Printf("🎯 Routing %s request to worker: %s\n", capability, workerID)
+
+	// Track request before routing
+	s.requestTracker.Track(msg.RequestId, msg.From, workerID, capability)
+	fmt.Printf("📝 Tracking request %s: %s → %s\n", msg.RequestId, msg.From, workerID)
 
 	// Route to worker - preserve all message fields
 	msg.To = workerID
@@ -194,7 +209,23 @@ func (s *Server) handleWorkerCall(msg *proto.Message) {
 
 // handleResponse routes responses back to original requester
 func (s *Server) handleResponse(msg *proto.Message) {
-	fmt.Printf("📬 Response: %s → %s\n", msg.From, msg.To)
+	fmt.Printf("📬 Response: %s → %s (request_id: %s)\n", msg.From, msg.To, msg.RequestId)
+
+	// If request_id is present, use it to find original requester
+	if msg.RequestId != "" {
+		if requesterID, found := s.requestTracker.GetRequester(msg.RequestId); found {
+			fmt.Printf("🔍 Found original requester via request_id %s: %s\n", msg.RequestId, requesterID)
+			
+			// Override To field with original requester
+			msg.To = requesterID
+			
+			// Complete tracking (remove from map)
+			s.requestTracker.Complete(msg.RequestId)
+			fmt.Printf("✅ Request %s completed and removed from tracking\n", msg.RequestId)
+		} else {
+			fmt.Printf("⚠️  Request %s not found in tracker (may be expired or already completed)\n", msg.RequestId)
+		}
+	}
 
 	// Validate target
 	if msg.To == "" {

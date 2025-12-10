@@ -12,14 +12,14 @@ from plugins.paddlet_onnx import paddlet_onnx
 
 
 class ImageAnalysisPlugin(BasePlugin):
-    """Analyzes images using OCR and returns detected text"""
+    """Analyzes images using PaddleOCR and returns detected text"""
     
     def __init__(self):
         super().__init__()
-        # Initialize OCR engine
+        # Initialize PaddleOCR engine
         weights_dir = os.path.join(os.path.dirname(__file__), 'weights')
         self.ocr_engine = paddlet_onnx(weights_dir=weights_dir)
-        print(f"✓ OCR engine initialized with weights from: {weights_dir}")
+        print(f"✓ PaddleOCR engine initialized with weights from: {weights_dir}")
     
     @property
     def name(self) -> str:

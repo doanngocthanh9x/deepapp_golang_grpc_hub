@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\thub.proto\x12\x03hub\"\xf3\x01\n\x07Message\x12\n\n\x02id\x18\x01 \x01(\t\x12\x0c\n\x04\x66rom\x18\x02 \x01(\t\x12\n\n\x02to\x18\x03 \x01(\t\x12\x0f\n\x07\x63hannel\x18\x04 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x05 \x01(\t\x12\x11\n\ttimestamp\x18\x06 \x01(\t\x12\x1e\n\x04type\x18\x07 \x01(\x0e\x32\x10.hub.MessageType\x12\x0e\n\x06\x61\x63tion\x18\x08 \x01(\t\x12,\n\x08metadata\x18\t \x03(\x0b\x32\x1a.hub.Message.MetadataEntry\x1a/\n\rMetadataEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"\xd4\x01\n\x12WorkerRegistration\x12\x11\n\tworker_id\x18\x01 \x01(\t\x12\x13\n\x0bworker_type\x18\x02 \x01(\t\x12,\n\x0c\x63\x61pabilities\x18\x03 \x03(\x0b\x32\x16.hub.ServiceCapability\x12\x37\n\x08metadata\x18\x04 \x03(\x0b\x32%.hub.WorkerRegistration.MetadataEntry\x1a/\n\rMetadataEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"c\n\x11ServiceCapability\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x13\n\x0b\x64\x65scription\x18\x02 \x01(\t\x12\x14\n\x0cinput_schema\x18\x03 \x01(\t\x12\x15\n\routput_schema\x18\x04 \x01(\t\"7\n\x07Request\x12\x1e\n\x04type\x18\x01 \x01(\x0e\x32\x10.hub.RequestType\x12\x0c\n\x04\x64\x61ta\x18\x02 \x01(\t\"5\n\x08Response\x12\x1b\n\x06status\x18\x01 \x01(\x0e\x32\x0b.hub.Status\x12\x0c\n\x04\x64\x61ta\x18\x02 \x01(\t*o\n\x0bMessageType\x12\n\n\x06\x44IRECT\x10\x00\x12\r\n\tBROADCAST\x10\x01\x12\x0b\n\x07\x43HANNEL\x10\x02\x12\x0c\n\x08REGISTER\x10\x03\x12\x0b\n\x07REQUEST\x10\x04\x12\x0c\n\x08RESPONSE\x10\x05\x12\x0f\n\x0bWORKER_CALL\x10\x06*.\n\x0bRequestType\x12\x08\n\x04JSON\x10\x00\x12\x08\n\x04\x46ILE\x10\x01\x12\x0b\n\x07\x43ONTROL\x10\x02*\x1b\n\x06Status\x12\x06\n\x02OK\x10\x00\x12\t\n\x05\x45RROR\x10\x01\x32\x37\n\nHubService\x12)\n\x07\x43onnect\x12\x0c.hub.Message\x1a\x0c.hub.Message(\x01\x30\x01\x42\x39\n\x0f\x63om.deepapp.hubZ&deepapp_golang_grpc_hub/internal/protob\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\thub.proto\x12\x03hub\"\x98\x02\n\x07Message\x12\n\n\x02id\x18\x01 \x01(\t\x12\x0c\n\x04\x66rom\x18\x02 \x01(\t\x12\n\n\x02to\x18\x03 \x01(\t\x12\x0f\n\x07\x63hannel\x18\x04 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x05 \x01(\t\x12\x11\n\ttimestamp\x18\x06 \x01(\t\x12\x1e\n\x04type\x18\x07 \x01(\x0e\x32\x10.hub.MessageType\x12\x0e\n\x06\x61\x63tion\x18\x08 \x01(\t\x12,\n\x08metadata\x18\t \x03(\x0b\x32\x1a.hub.Message.MetadataEntry\x12\x12\n\nrequest_id\x18\n \x01(\t\x12\x0f\n\x07\x66ile_id\x18\x0b \x01(\t\x1a/\n\rMetadataEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"\xfc\x01\n\tFileChunk\x12\x0f\n\x07\x66ile_id\x18\x01 \x01(\t\x12\x12\n\nrequest_id\x18\x02 \x01(\t\x12\x0c\n\x04\x64\x61ta\x18\x03 \x01(\x0c\x12\x0e\n\x06offset\x18\x04 \x01(\x03\x12\x12\n\ntotal_size\x18\x05 \x01(\x03\x12\x10\n\x08\x66ilename\x18\x06 \x01(\t\x12\x14\n\x0c\x63ontent_type\x18\x07 \x01(\t\x12.\n\x08metadata\x18\x08 \x03(\x0b\x32\x1c.hub.FileChunk.MetadataEntry\x12\x0f\n\x07is_last\x18\t \x01(\x08\x1a/\n\rMetadataEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"\\\n\x12\x46ileUploadResponse\x12\x0f\n\x07\x66ile_id\x18\x01 \x01(\t\x12\x16\n\x0e\x62ytes_received\x18\x02 \x01(\x03\x12\x0e\n\x06status\x18\x03 \x01(\t\x12\r\n\x05\x65rror\x18\x04 \x01(\t\"J\n\x13\x46ileDownloadRequest\x12\x0f\n\x07\x66ile_id\x18\x01 \x01(\t\x12\x0e\n\x06offset\x18\x02 \x01(\x03\x12\x12\n\nchunk_size\x18\x03 \x01(\x03\"\xd4\x01\n\x12WorkerRegistration\x12\x11\n\tworker_id\x18\x01 \x01(\t\x12\x13\n\x0bworker_type\x18\x02 \x01(\t\x12,\n\x0c\x63\x61pabilities\x18\x03 \x03(\x0b\x32\x16.hub.ServiceCapability\x12\x37\n\x08metadata\x18\x04 \x03(\x0b\x32%.hub.WorkerRegistration.MetadataEntry\x1a/\n\rMetadataEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"c\n\x11ServiceCapability\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x13\n\x0b\x64\x65scription\x18\x02 \x01(\t\x12\x14\n\x0cinput_schema\x18\x03 \x01(\t\x12\x15\n\routput_schema\x18\x04 \x01(\t\"7\n\x07Request\x12\x1e\n\x04type\x18\x01 \x01(\x0e\x32\x10.hub.RequestType\x12\x0c\n\x04\x64\x61ta\x18\x02 \x01(\t\"5\n\x08Response\x12\x1b\n\x06status\x18\x01 \x01(\x0e\x32\x0b.hub.Status\x12\x0c\n\x04\x64\x61ta\x18\x02 \x01(\t*o\n\x0bMessageType\x12\n\n\x06\x44IRECT\x10\x00\x12\r\n\tBROADCAST\x10\x01\x12\x0b\n\x07\x43HANNEL\x10\x02\x12\x0c\n\x08REGISTER\x10\x03\x12\x0b\n\x07REQUEST\x10\x04\x12\x0c\n\x08RESPONSE\x10\x05\x12\x0f\n\x0bWORKER_CALL\x10\x06*.\n\x0bRequestType\x12\x08\n\x04JSON\x10\x00\x12\x08\n\x04\x46ILE\x10\x01\x12\x0b\n\x07\x43ONTROL\x10\x02*\x1b\n\x06Status\x12\x06\n\x02OK\x10\x00\x12\t\n\x05\x45RROR\x10\x01\x32\xac\x01\n\nHubService\x12)\n\x07\x43onnect\x12\x0c.hub.Message\x1a\x0c.hub.Message(\x01\x30\x01\x12\x37\n\nUploadFile\x12\x0e.hub.FileChunk\x1a\x17.hub.FileUploadResponse(\x01\x12:\n\x0c\x44ownloadFile\x12\x18.hub.FileDownloadRequest\x1a\x0e.hub.FileChunk0\x01\x42\x39\n\x0f\x63om.deepapp.hubZ&deepapp_golang_grpc_hub/internal/protob\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -34,28 +34,38 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._serialized_options = b'\n\017com.deepapp.hubZ&deepapp_golang_grpc_hub/internal/proto'
   _globals['_MESSAGE_METADATAENTRY']._loaded_options = None
   _globals['_MESSAGE_METADATAENTRY']._serialized_options = b'8\001'
+  _globals['_FILECHUNK_METADATAENTRY']._loaded_options = None
+  _globals['_FILECHUNK_METADATAENTRY']._serialized_options = b'8\001'
   _globals['_WORKERREGISTRATION_METADATAENTRY']._loaded_options = None
   _globals['_WORKERREGISTRATION_METADATAENTRY']._serialized_options = b'8\001'
-  _globals['_MESSAGETYPE']._serialized_start=692
-  _globals['_MESSAGETYPE']._serialized_end=803
-  _globals['_REQUESTTYPE']._serialized_start=805
-  _globals['_REQUESTTYPE']._serialized_end=851
-  _globals['_STATUS']._serialized_start=853
-  _globals['_STATUS']._serialized_end=880
+  _globals['_MESSAGETYPE']._serialized_start=1154
+  _globals['_MESSAGETYPE']._serialized_end=1265
+  _globals['_REQUESTTYPE']._serialized_start=1267
+  _globals['_REQUESTTYPE']._serialized_end=1313
+  _globals['_STATUS']._serialized_start=1315
+  _globals['_STATUS']._serialized_end=1342
   _globals['_MESSAGE']._serialized_start=19
-  _globals['_MESSAGE']._serialized_end=262
-  _globals['_MESSAGE_METADATAENTRY']._serialized_start=215
-  _globals['_MESSAGE_METADATAENTRY']._serialized_end=262
-  _globals['_WORKERREGISTRATION']._serialized_start=265
-  _globals['_WORKERREGISTRATION']._serialized_end=477
-  _globals['_WORKERREGISTRATION_METADATAENTRY']._serialized_start=215
-  _globals['_WORKERREGISTRATION_METADATAENTRY']._serialized_end=262
-  _globals['_SERVICECAPABILITY']._serialized_start=479
-  _globals['_SERVICECAPABILITY']._serialized_end=578
-  _globals['_REQUEST']._serialized_start=580
-  _globals['_REQUEST']._serialized_end=635
-  _globals['_RESPONSE']._serialized_start=637
-  _globals['_RESPONSE']._serialized_end=690
-  _globals['_HUBSERVICE']._serialized_start=882
-  _globals['_HUBSERVICE']._serialized_end=937
+  _globals['_MESSAGE']._serialized_end=299
+  _globals['_MESSAGE_METADATAENTRY']._serialized_start=252
+  _globals['_MESSAGE_METADATAENTRY']._serialized_end=299
+  _globals['_FILECHUNK']._serialized_start=302
+  _globals['_FILECHUNK']._serialized_end=554
+  _globals['_FILECHUNK_METADATAENTRY']._serialized_start=252
+  _globals['_FILECHUNK_METADATAENTRY']._serialized_end=299
+  _globals['_FILEUPLOADRESPONSE']._serialized_start=556
+  _globals['_FILEUPLOADRESPONSE']._serialized_end=648
+  _globals['_FILEDOWNLOADREQUEST']._serialized_start=650
+  _globals['_FILEDOWNLOADREQUEST']._serialized_end=724
+  _globals['_WORKERREGISTRATION']._serialized_start=727
+  _globals['_WORKERREGISTRATION']._serialized_end=939
+  _globals['_WORKERREGISTRATION_METADATAENTRY']._serialized_start=252
+  _globals['_WORKERREGISTRATION_METADATAENTRY']._serialized_end=299
+  _globals['_SERVICECAPABILITY']._serialized_start=941
+  _globals['_SERVICECAPABILITY']._serialized_end=1040
+  _globals['_REQUEST']._serialized_start=1042
+  _globals['_REQUEST']._serialized_end=1097
+  _globals['_RESPONSE']._serialized_start=1099
+  _globals['_RESPONSE']._serialized_end=1152
+  _globals['_HUBSERVICE']._serialized_start=1345
+  _globals['_HUBSERVICE']._serialized_end=1517
 # @@protoc_insertion_point(module_scope)

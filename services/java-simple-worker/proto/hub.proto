@@ -7,6 +7,8 @@ option java_package = "com.deepapp.hub";
 
 service HubService {
   rpc Connect(stream Message) returns (stream Message);
+  rpc UploadFile(stream FileChunk) returns (FileUploadResponse);
+  rpc DownloadFile(FileDownloadRequest) returns (stream FileChunk);
 }
 
 message Message {
@@ -19,6 +21,34 @@ message Message {
   MessageType type = 7;
   string action = 8; // For dynamic routing: "register", "request", "response", etc
   map<string, string> metadata = 9; // Flexible metadata
+  string request_id = 10; // Unique request identifier for tracking responses
+  string file_id = 11; // Reference to uploaded file (instead of base64 in content)
+}
+
+// File streaming messages
+message FileChunk {
+  string file_id = 1;        // Unique file identifier
+  string request_id = 2;     // Request this file belongs to
+  bytes data = 3;            // Chunk data (max 64KB recommended)
+  int64 offset = 4;          // Byte offset in file
+  int64 total_size = 5;      // Total file size (-1 if unknown)
+  string filename = 6;       // Original filename
+  string content_type = 7;   // MIME type
+  map<string, string> metadata = 8; // Additional metadata
+  bool is_last = 9;          // True for final chunk
+}
+
+message FileUploadResponse {
+  string file_id = 1;        // Generated file ID
+  int64 bytes_received = 2;  // Total bytes received
+  string status = 3;         // "success" or "error"
+  string error = 4;          // Error message if failed
+}
+
+message FileDownloadRequest {
+  string file_id = 1;        // File ID to download
+  int64 offset = 2;          // Start offset (for resume)
+  int64 chunk_size = 3;      // Preferred chunk size
 }
 
 enum MessageType {

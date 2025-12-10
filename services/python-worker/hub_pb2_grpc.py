@@ -39,12 +39,34 @@ class HubServiceStub(object):
                 request_serializer=hub__pb2.Message.SerializeToString,
                 response_deserializer=hub__pb2.Message.FromString,
                 _registered_method=True)
+        self.UploadFile = channel.stream_unary(
+                '/hub.HubService/UploadFile',
+                request_serializer=hub__pb2.FileChunk.SerializeToString,
+                response_deserializer=hub__pb2.FileUploadResponse.FromString,
+                _registered_method=True)
+        self.DownloadFile = channel.unary_stream(
+                '/hub.HubService/DownloadFile',
+                request_serializer=hub__pb2.FileDownloadRequest.SerializeToString,
+                response_deserializer=hub__pb2.FileChunk.FromString,
+                _registered_method=True)
 
 
 class HubServiceServicer(object):
     """Missing associated documentation comment in .proto file."""
 
     def Connect(self, request_iterator, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def UploadFile(self, request_iterator, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def DownloadFile(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -57,6 +79,16 @@ def add_HubServiceServicer_to_server(servicer, server):
                     servicer.Connect,
                     request_deserializer=hub__pb2.Message.FromString,
                     response_serializer=hub__pb2.Message.SerializeToString,
+            ),
+            'UploadFile': grpc.stream_unary_rpc_method_handler(
+                    servicer.UploadFile,
+                    request_deserializer=hub__pb2.FileChunk.FromString,
+                    response_serializer=hub__pb2.FileUploadResponse.SerializeToString,
+            ),
+            'DownloadFile': grpc.unary_stream_rpc_method_handler(
+                    servicer.DownloadFile,
+                    request_deserializer=hub__pb2.FileDownloadRequest.FromString,
+                    response_serializer=hub__pb2.FileChunk.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -86,6 +118,60 @@ class HubService(object):
             '/hub.HubService/Connect',
             hub__pb2.Message.SerializeToString,
             hub__pb2.Message.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def UploadFile(request_iterator,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.stream_unary(
+            request_iterator,
+            target,
+            '/hub.HubService/UploadFile',
+            hub__pb2.FileChunk.SerializeToString,
+            hub__pb2.FileUploadResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def DownloadFile(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_stream(
+            request,
+            target,
+            '/hub.HubService/DownloadFile',
+            hub__pb2.FileDownloadRequest.SerializeToString,
+            hub__pb2.FileChunk.FromString,
             options,
             channel_credentials,
             insecure,
