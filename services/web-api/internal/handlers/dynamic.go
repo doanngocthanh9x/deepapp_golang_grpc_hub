@@ -81,9 +81,15 @@ func (h *DynamicHandler) HandleSwagger(w http.ResponseWriter, r *http.Request) {
 	spec := map[string]interface{}{
 		"openapi": "3.0.0",
 		"info": map[string]interface{}{
-			"title":       "DeepApp gRPC Hub API",
-			"description": "Dynamic API generated from worker capabilities",
-			"version":     "1.0.0",
+			"title": "DeepApp gRPC Hub API",
+			"description": `Dynamic API generated from worker capabilities
+
+API URL Pattern: /api/{worker_id}/call/{capability}
+- worker_id: Unique identifier of the worker (e.g., python-worker, java-worker)
+- capability: Name of the capability/function to call
+
+This pattern prevents naming conflicts when multiple workers implement capabilities with the same name.`,
+			"version": "1.0.0",
 		},
 		"servers": []map[string]interface{}{
 			{
@@ -96,7 +102,24 @@ func (h *DynamicHandler) HandleSwagger(w http.ResponseWriter, r *http.Request) {
 
 	paths := spec["paths"].(map[string]interface{})
 
-	// Add dynamic endpoints based on capabilities
+	// Track which workers have which capabilities
+	workerCapabilities := make(map[string][]string)
+	for _, workerData := range discoveryResult.Workers {
+		if workerMap, ok := workerData.(map[string]interface{}); ok {
+			workerID, _ := workerMap["id"].(string)
+			if caps, ok := workerMap["capabilities"].([]interface{}); ok {
+				for _, cap := range caps {
+					if capMap, ok := cap.(map[string]interface{}); ok {
+						if capName, ok := capMap["name"].(string); ok {
+							workerCapabilities[workerID] = append(workerCapabilities[workerID], capName)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Add dynamic endpoints based on capabilities with worker-specific paths
 	for capName, capData := range discoveryResult.Capabilities {
 		capMap, ok := capData.(map[string]interface{})
 		if !ok {
@@ -123,69 +146,83 @@ func (h *DynamicHandler) HandleSwagger(w http.ResponseWriter, r *http.Request) {
 			fileFieldName = ffn
 		}
 
-		// Create path
-		path := fmt.Sprintf("/api/call/%s", capName)
+		// Create worker-specific paths: /api/{worker_id}/call/{capability}
+		// Find which workers have this capability
+		for workerID, caps := range workerCapabilities {
+			hasCapability := false
+			for _, cap := range caps {
+				if cap == capName {
+					hasCapability = true
+					break
+				}
+			}
+			if !hasCapability {
+				continue
+			}
 
-		requestBody := map[string]interface{}{
-			"required": true,
-			"content":  map[string]interface{}{},
-		}
+			path := fmt.Sprintf("/api/%s/call/%s", workerID, capName)
 
-		content := requestBody["content"].(map[string]interface{})
+			requestBody := map[string]interface{}{
+				"required": true,
+				"content":  map[string]interface{}{},
+			}
 
-		if acceptsFile {
-			// Multipart form data for file upload
-			content["multipart/form-data"] = map[string]interface{}{
-				"schema": map[string]interface{}{
-					"type": "object",
-					"properties": map[string]interface{}{
-						fileFieldName: map[string]interface{}{
-							"type":   "string",
-							"format": "binary",
-						},
-						"params": map[string]interface{}{
-							"type":        "object",
-							"description": "Additional parameters as JSON",
+			content := requestBody["content"].(map[string]interface{})
+
+			if acceptsFile {
+				// Multipart form data for file upload
+				content["multipart/form-data"] = map[string]interface{}{
+					"schema": map[string]interface{}{
+						"type": "object",
+						"properties": map[string]interface{}{
+							fileFieldName: map[string]interface{}{
+								"type":   "string",
+								"format": "binary",
+							},
+							"params": map[string]interface{}{
+								"type":        "object",
+								"description": "Additional parameters as JSON",
+							},
 						},
 					},
-				},
+				}
+			} else {
+				// JSON request body
+				content["application/json"] = map[string]interface{}{
+					"schema": map[string]interface{}{
+						"type":        "object",
+						"description": "Request parameters",
+					},
+				}
 			}
-		} else {
-			// JSON request body
-			content["application/json"] = map[string]interface{}{
-				"schema": map[string]interface{}{
-					"type":        "object",
-					"description": "Request parameters",
-				},
-			}
-		}
 
-		operation := map[string]interface{}{
-			"summary":     fmt.Sprintf("Call %s capability", capName),
-			"description": description,
-			"requestBody": requestBody,
-			"responses": map[string]interface{}{
-				"200": map[string]interface{}{
-					"description": "Successful response",
-					"content": map[string]interface{}{
-						"application/json": map[string]interface{}{
-							"schema": map[string]interface{}{
-								"type": "object",
-								"properties": map[string]interface{}{
-									"status":    map[string]interface{}{"type": "string"},
-									"response":  map[string]interface{}{"type": "string"},
-									"from":      map[string]interface{}{"type": "string"},
-									"timestamp": map[string]interface{}{"type": "string"},
+			operation := map[string]interface{}{
+				"summary":     fmt.Sprintf("Call %s capability on %s", capName, workerID),
+				"description": description,
+				"requestBody": requestBody,
+				"responses": map[string]interface{}{
+					"200": map[string]interface{}{
+						"description": "Successful response",
+						"content": map[string]interface{}{
+							"application/json": map[string]interface{}{
+								"schema": map[string]interface{}{
+									"type": "object",
+									"properties": map[string]interface{}{
+										"status":    map[string]interface{}{"type": "string"},
+										"response":  map[string]interface{}{"type": "string"},
+										"from":      map[string]interface{}{"type": "string"},
+										"timestamp": map[string]interface{}{"type": "string"},
+									},
 								},
 							},
 						},
 					},
 				},
-			},
-		}
+			}
 
-		paths[path] = map[string]interface{}{
-			httpMethod: operation,
+			paths[path] = map[string]interface{}{
+				httpMethod: operation,
+			}
 		}
 	}
 
@@ -258,6 +295,8 @@ func (h *DynamicHandler) HandleSwaggerUI(w http.ResponseWriter, r *http.Request)
 }
 
 // HandleDynamicCall handles dynamic API calls to any capability
+// Old pattern: /api/call/{capability}
+// DEPRECATED: Use HandleWorkerCall instead
 func (h *DynamicHandler) HandleDynamicCall(w http.ResponseWriter, r *http.Request) {
 	// Extract capability name from path: /api/call/{capability}
 	capabilityName := r.URL.Path[len("/api/call/"):]
@@ -333,6 +372,131 @@ func (h *DynamicHandler) HandleDynamicCall(w http.ResponseWriter, r *http.Reques
 
 	// Send to Hub (let Hub route to appropriate worker)
 	response, err := h.hubClient.SendRequest("", capabilityName, requestData)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":    "success",
+		"response":  response.Content,
+		"from":      response.From,
+		"timestamp": time.Now().Format(time.RFC3339),
+	})
+}
+
+// HandleWorkerCall handles worker-specific API calls
+// New pattern: /api/{worker_id}/call/{capability}
+// Examples:
+//   /api/python-worker/call/hello
+//   /api/java-simple-worker/call/read_file_info
+func (h *DynamicHandler) HandleWorkerCall(w http.ResponseWriter, r *http.Request) {
+	// Parse path: /api/{worker_id}/call/{capability}
+	path := strings.TrimPrefix(r.URL.Path, "/api/")
+	parts := strings.SplitN(path, "/", 3)
+
+	// Handle special endpoints that don't follow worker pattern
+	if len(parts) < 3 {
+		// Check if it's a core endpoint
+		switch parts[0] {
+		case "capabilities":
+			h.HandleCapabilities(w, r)
+			return
+		case "swagger.json":
+			h.HandleSwagger(w, r)
+			return
+		case "docs":
+			h.HandleSwaggerUI(w, r)
+			return
+		case "status":
+			// Status is handled by separate handler, should not reach here
+			http.Error(w, "Not found", http.StatusNotFound)
+			return
+		default:
+			http.Error(w, "Invalid API path. Use /api/{worker_id}/call/{capability}", http.StatusBadRequest)
+			return
+		}
+	}
+
+	workerID := parts[0]
+	action := parts[1]
+	capabilityName := parts[2]
+
+	if action != "call" {
+		http.Error(w, "Invalid action. Use 'call'", http.StatusBadRequest)
+		return
+	}
+
+	if workerID == "" || capabilityName == "" {
+		http.Error(w, "Worker ID and capability name required", http.StatusBadRequest)
+		return
+	}
+
+	var requestData string
+
+	// Check if request has file upload
+	contentType := r.Header.Get("Content-Type")
+	if len(contentType) > 19 && contentType[:19] == "multipart/form-data" {
+		// Handle file upload
+		err := r.ParseMultipartForm(100 << 20) // 100 MB max
+		if err != nil {
+			http.Error(w, "Failed to parse multipart form", http.StatusBadRequest)
+			return
+		}
+
+		file, header, err := r.FormFile("file")
+		if err != nil {
+			// Try other common field names
+			file, header, err = r.FormFile("image")
+			if err != nil {
+				file, header, err = r.FormFile("document")
+			}
+		}
+
+		if err != nil {
+			http.Error(w, "File required for this capability", http.StatusBadRequest)
+			return
+		}
+		defer file.Close()
+
+		// Read file
+		fileData, err := io.ReadAll(file)
+		if err != nil {
+			http.Error(w, "Failed to read file", http.StatusInternalServerError)
+			return
+		}
+
+		// Get additional params
+		paramsStr := r.FormValue("params")
+		var params map[string]interface{}
+		if paramsStr != "" {
+			json.Unmarshal([]byte(paramsStr), &params)
+		} else {
+			params = make(map[string]interface{})
+		}
+
+		// Add file info to params
+		params["filename"] = header.Filename
+		params["size"] = len(fileData)
+		params["content_type"] = header.Header.Get("Content-Type")
+
+		requestJSON, _ := json.Marshal(params)
+		requestData = string(requestJSON)
+	} else {
+		// Handle JSON request
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, "Invalid JSON", http.StatusBadRequest)
+			return
+		}
+
+		requestJSON, _ := json.Marshal(body)
+		requestData = string(requestJSON)
+	}
+
+	// Send to specific worker
+	response, err := h.hubClient.SendRequest(workerID, capabilityName, requestData)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error: %v", err), http.StatusInternalServerError)
 		return

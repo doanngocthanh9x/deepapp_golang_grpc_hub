@@ -68,6 +68,13 @@
             <version>2.0.7</version>
         </dependency>
 
+        <!-- Reflections for plugin discovery -->
+        <dependency>
+            <groupId>org.reflections</groupId>
+            <artifactId>reflections</artifactId>
+            <version>0.10.2</version>
+        </dependency>
+
         <!-- Utilities -->
         <dependency>
             <groupId>org.apache.commons</groupId>

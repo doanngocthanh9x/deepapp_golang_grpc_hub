@@ -1,0 +1,88 @@
+version: '3.8'
+
+services:
+  hub:
+    image: ghcr.io/${GITHUB_REPOSITORY}/hub:${IMAGE_TAG:-main}
+    container_name: grpc-hub
+    ports:
+      - "50051:50051"
+    environment:
+      - PORT=50051
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "50051"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  webapi:
+    image: ghcr.io/${GITHUB_REPOSITORY}/webapi:${IMAGE_TAG:-main}
+    container_name: web-api
+    ports:
+      - "8081:8081"
+    environment:
+      - PORT=8081
+      - HUB_ADDRESS=hub:50051
+    depends_on:
+      hub:
+        condition: service_healthy
+    restart: unless-stopped
+
+  python-worker:
+    image: ghcr.io/${GITHUB_REPOSITORY}/python-worker:${IMAGE_TAG:-main}
+    container_name: python-worker
+    environment:
+      - HUB_ADDRESS=hub:50051
+      - WORKER_ID=python-worker
+    depends_on:
+      hub:
+        condition: service_healthy
+    restart: unless-stopped
+
+  java-worker:
+    image: ghcr.io/${GITHUB_REPOSITORY}/java-worker:${IMAGE_TAG:-main}
+    container_name: java-worker
+    environment:
+      - HUB_ADDRESS=hub:50051
+      - WORKER_ID=java-simple-worker
+    depends_on:
+      hub:
+        condition: service_healthy
+    restart: unless-stopped
+
+  node-worker:
+    image: ghcr.io/${GITHUB_REPOSITORY}/node-worker:${IMAGE_TAG:-main}
+    container_name: node-worker
+    environment:
+      - HUB_ADDRESS=hub:50051
+      - WORKER_ID=node-worker
+    depends_on:
+      hub:
+        condition: service_healthy
+    restart: unless-stopped
+
+  go-worker:
+    image: ghcr.io/${GITHUB_REPOSITORY}/go-worker:${IMAGE_TAG:-main}
+    container_name: go-worker
+    environment:
+      - HUB_ADDRESS=hub:50051
+      - WORKER_ID=go-worker
+    depends_on:
+      hub:
+        condition: service_healthy
+    restart: unless-stopped
+
+  cpp-worker:
+    image: ghcr.io/${GITHUB_REPOSITORY}/cpp-worker:${IMAGE_TAG:-main}
+    container_name: cpp-worker
+    environment:
+      - HUB_ADDRESS=hub:50051
+      - WORKER_ID=cpp-worker
+    depends_on:
+      hub:
+        condition: service_healthy
+    restart: unless-stopped
+
+networks:
+  default:
+    name: deepapp-network

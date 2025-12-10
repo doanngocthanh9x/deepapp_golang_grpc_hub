@@ -146,3 +146,85 @@ func (s *Server) handleServiceRequest(msg *proto.Message) {
 	msg.To = workerID
 	s.dispatcher.Dispatch(msg)
 }
+
+// handleWorkerCall routes worker-to-worker calls
+func (s *Server) handleWorkerCall(msg *proto.Message) {
+	fmt.Printf("🔗 Worker-to-Worker call: %s → %s (capability: %s)\n", msg.From, msg.To, msg.Channel)
+
+	// Validate target worker exists
+	targetWorker := msg.To
+	if targetWorker == "" {
+		fmt.Printf("❌ Worker call missing target worker\n")
+		s.sendErrorResponse(msg, "Target worker not specified")
+		return
+	}
+
+	// Check if target worker is registered
+	if !s.connMgr.Has(targetWorker) {
+		fmt.Printf("❌ Target worker not found: %s\n", targetWorker)
+		s.sendErrorResponse(msg, fmt.Sprintf("Worker %s not found or offline", targetWorker))
+		return
+	}
+
+	// Validate capability
+	capability := msg.Channel
+	if capability == "" {
+		// Try to get from metadata
+		if cap, ok := msg.Metadata["capability"]; ok {
+			capability = cap
+			msg.Channel = cap
+		} else {
+			fmt.Printf("❌ Worker call missing capability\n")
+			s.sendErrorResponse(msg, "Capability not specified")
+			return
+		}
+	}
+
+	// Check if target worker has the capability
+	workerForCap, found := s.registry.GetWorkerForCapability(capability)
+	if !found || workerForCap != targetWorker {
+		fmt.Printf("⚠️  Warning: Worker %s may not have capability %s\n", targetWorker, capability)
+	}
+
+	fmt.Printf("✅ Forwarding worker call to %s\n", targetWorker)
+
+	// Forward the message to target worker
+	s.dispatcher.Dispatch(msg)
+}
+
+// handleResponse routes responses back to original requester
+func (s *Server) handleResponse(msg *proto.Message) {
+	fmt.Printf("📬 Response: %s → %s\n", msg.From, msg.To)
+
+	// Validate target
+	if msg.To == "" {
+		fmt.Printf("❌ Response missing target\n")
+		return
+	}
+
+	// Check if target is connected
+	if !s.connMgr.Has(msg.To) {
+		fmt.Printf("❌ Response target not connected: %s\n", msg.To)
+		return
+	}
+
+	// Forward response
+	s.dispatcher.Dispatch(msg)
+	fmt.Printf("✅ Response delivered to %s\n", msg.To)
+}
+
+// sendErrorResponse sends an error response back to requester
+func (s *Server) sendErrorResponse(originalMsg *proto.Message, errorMessage string) {
+	errorMsg := &proto.Message{
+		Id:        fmt.Sprintf("error-%d", time.Now().UnixNano()),
+		From:      "hub",
+		To:        originalMsg.From,
+		Type:      proto.MessageType_RESPONSE,
+		Content:   fmt.Sprintf(`{"error":"%s"}`, errorMessage),
+		Timestamp: time.Now().Format(time.RFC3339),
+		Metadata: map[string]string{
+			"original_message_id": originalMsg.Id,
+		},
+	}
+	s.dispatcher.Dispatch(errorMsg)
+}

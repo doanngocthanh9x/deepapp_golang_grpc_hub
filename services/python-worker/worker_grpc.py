@@ -107,7 +107,7 @@ class PythonWorker:
                     target_worker='java-simple-worker',
                     capability='read_file_info',
                     params={'filePath': file_path},  # Match Java's expected field name
-                    timeout=10
+                    timeout=30
                 )
                 
                 # Combine results
@@ -193,20 +193,16 @@ class PythonWorker:
         self.send_queue.put(call_msg)
         print(f"  → Sent WORKER_CALL message with ID {request_id}")
         
-        # Wait for response
+        # Wait for response directly (no separate thread needed)
         print(f"  → Waiting for response (timeout: {timeout}s)...")
         if response_event.wait(timeout=timeout):
             print(f"  → Response event received for {request_id}")
-            with self.pending_lock:
-                removed = self.pending_calls.pop(request_id, None)
-                print(f"  → Removed pending call {request_id}: {removed is not None}")
-            
             if response_data['error']:
                 raise Exception(response_data['error'])
-            
             return response_data['response']
         else:
-            # Timeout
+            # Timeout - clean up and raise error
+            print(f"  → Timeout waiting for response to {request_id}")
             with self.pending_lock:
                 self.pending_calls.pop(request_id, None)
             raise TimeoutError(f"No response from {target_worker} after {timeout}s")
@@ -230,10 +226,15 @@ class PythonWorker:
                     call_info['data']['response'] = response_content
                     call_info['event'].set()
                     print(f"  ✓ Matched and completed pending call {request_id}")
+                    # Clean up the pending call here instead of in call_worker
+                    del self.pending_calls[request_id]
+                    print(f"  → Cleaned up pending call {request_id} in response handler")
                 except Exception as e:
                     call_info['data']['error'] = f"Failed to parse response: {e}"
                     call_info['event'].set()
                     print(f"  ✗ Error parsing response: {e}")
+                    # Clean up on error too
+                    del self.pending_calls[request_id]
             else:
                 # No matching pending call - might be a regular response
                 print(f"  ⚠️  No pending call found for request_id: {request_id}")

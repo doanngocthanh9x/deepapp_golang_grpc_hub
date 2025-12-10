@@ -158,7 +158,8 @@ func (h *IndexHandler) HandleIndex(w http.ResponseWriter, r *http.Request) {
         }
 
         .input-group input,
-        .input-group textarea {
+        .input-group textarea,
+        .input-group select {
             width: 100%;
             padding: 12px;
             border: 2px solid #e0e0e0;
@@ -168,7 +169,8 @@ func (h *IndexHandler) HandleIndex(w http.ResponseWriter, r *http.Request) {
         }
 
         .input-group input:focus,
-        .input-group textarea:focus {
+        .input-group textarea:focus,
+        .input-group select:focus {
             outline: none;
             border-color: #667eea;
         }
@@ -296,17 +298,41 @@ func (h *IndexHandler) HandleIndex(w http.ResponseWriter, r *http.Request) {
             <div id="python-tab" class="tab-content active">
                 <div class="endpoint-card">
                     <h3>Hello World</h3>
-                    <span class="method GET">GET</span>
                     <span class="method POST">POST</span>
-                    <div class="endpoint-path">/api/worker/python/hello</div>
+                    <div class="endpoint-path">/api/python-worker/call/hello</div>
                     <p>Simple hello world response from Python worker</p>
                     <button class="test-btn" onclick="testPythonHello()">Test Hello</button>
                 </div>
 
                 <div class="endpoint-card">
+                    <h3>Calculator</h3>
+                    <span class="method POST">POST</span>
+                    <div class="endpoint-path">/api/python-worker/call/calculate</div>
+                    <p>Perform mathematical operations</p>
+                    <div class="input-group">
+                        <label>Operation:</label>
+                        <select id="operation">
+                            <option value="add">Add (+)</option>
+                            <option value="subtract">Subtract (-)</option>
+                            <option value="multiply">Multiply (×)</option>
+                            <option value="divide">Divide (÷)</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <label>Number A:</label>
+                        <input type="number" id="numA" value="10">
+                    </div>
+                    <div class="input-group">
+                        <label>Number B:</label>
+                        <input type="number" id="numB" value="5">
+                    </div>
+                    <button class="test-btn" onclick="testCalculator()">Calculate</button>
+                </div>
+
+                <div class="endpoint-card">
                     <h3>Analyze Image</h3>
                     <span class="method POST">POST</span>
-                    <div class="endpoint-path">/api/worker/python/analyze_image</div>
+                    <div class="endpoint-path">/api/python-worker/call/analyze_image</div>
                     <p>Upload and analyze an image</p>
                     <div class="input-group">
                         <label>Select Image:</label>
@@ -320,9 +346,8 @@ func (h *IndexHandler) HandleIndex(w http.ResponseWriter, r *http.Request) {
             <div id="java-tab" class="tab-content">
                 <div class="endpoint-card">
                     <h3>Hello World</h3>
-                    <span class="method GET">GET</span>
                     <span class="method POST">POST</span>
-                    <div class="endpoint-path">/api/worker/java/hello</div>
+                    <div class="endpoint-path">/api/java-simple-worker/call/hello_world</div>
                     <p>Simple hello world response from Java worker</p>
                     <button class="test-btn" onclick="testJavaHello()">Test Hello</button>
                 </div>
@@ -330,7 +355,7 @@ func (h *IndexHandler) HandleIndex(w http.ResponseWriter, r *http.Request) {
                 <div class="endpoint-card">
                     <h3>File Info</h3>
                     <span class="method POST">POST</span>
-                    <div class="endpoint-path">/api/worker/java/file_info</div>
+                    <div class="endpoint-path">/api/java-simple-worker/call/read_file_info</div>
                     <p>Get information about a file on the server</p>
                     <div class="input-group">
                         <label>File Path:</label>
@@ -369,8 +394,12 @@ func (h *IndexHandler) HandleIndex(w http.ResponseWriter, r *http.Request) {
                 <div class="endpoint-card">
                     <h3>Dynamic Call</h3>
                     <span class="method POST">POST</span>
-                    <div class="endpoint-path">/api/call/{capability}</div>
-                    <p>Call any registered capability dynamically</p>
+                    <div class="endpoint-path">/api/{worker_id}/call/{capability}</div>
+                    <p>Call any registered capability dynamically with worker-specific routing</p>
+                    <div class="input-group">
+                        <label>Worker ID:</label>
+                        <input type="text" id="dynamicWorker" placeholder="python-worker" value="python-worker">
+                    </div>
                     <div class="input-group">
                         <label>Capability Name:</label>
                         <input type="text" id="dynamicCapability" placeholder="hello" value="hello">
@@ -463,7 +492,32 @@ func (h *IndexHandler) HandleIndex(w http.ResponseWriter, r *http.Request) {
         // Python Worker Functions
         function testPythonHello() {
             showLoader();
-            fetch('/api/worker/python/hello', { method: 'POST' })
+            fetch('/api/python-worker/call/hello', { 
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({})
+            })
+                .then(r => r.json())
+                .then(showResult)
+                .catch(err => showError(err.message));
+        }
+
+        function testCalculator() {
+            const operation = document.getElementById('operation').value;
+            const a = parseFloat(document.getElementById('numA').value);
+            const b = parseFloat(document.getElementById('numB').value);
+
+            if (isNaN(a) || isNaN(b)) {
+                alert('Please enter valid numbers');
+                return;
+            }
+
+            showLoader();
+            fetch('/api/python-worker/call/calculate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ operation, a, b })
+            })
                 .then(r => r.json())
                 .then(showResult)
                 .catch(err => showError(err.message));
@@ -480,7 +534,7 @@ func (h *IndexHandler) HandleIndex(w http.ResponseWriter, r *http.Request) {
             formData.append('image', file);
 
             showLoader();
-            fetch('/api/worker/python/analyze_image', { method: 'POST', body: formData })
+            fetch('/api/python-worker/call/analyze_image', { method: 'POST', body: formData })
                 .then(r => r.json())
                 .then(showResult)
                 .catch(err => showError(err.message));
@@ -489,7 +543,11 @@ func (h *IndexHandler) HandleIndex(w http.ResponseWriter, r *http.Request) {
         // Java Worker Functions
         function testJavaHello() {
             showLoader();
-            fetch('/api/worker/java/hello', { method: 'POST' })
+            fetch('/api/java-simple-worker/call/hello_world', { 
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({})
+            })
                 .then(r => r.json())
                 .then(showResult)
                 .catch(err => showError(err.message));
@@ -503,7 +561,7 @@ func (h *IndexHandler) HandleIndex(w http.ResponseWriter, r *http.Request) {
             }
 
             showLoader();
-            fetch('/api/worker/java/file_info', {
+            fetch('/api/java-simple-worker/call/read_file_info', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ filePath: filePath })
@@ -523,8 +581,14 @@ func (h *IndexHandler) HandleIndex(w http.ResponseWriter, r *http.Request) {
         }
 
         function testDynamicCall() {
+            const workerID = document.getElementById('dynamicWorker').value;
             const capability = document.getElementById('dynamicCapability').value;
             const data = document.getElementById('dynamicData').value;
+
+            if (!workerID) {
+                alert('Please enter a worker ID');
+                return;
+            }
 
             if (!capability) {
                 alert('Please enter a capability name');
@@ -540,7 +604,7 @@ func (h *IndexHandler) HandleIndex(w http.ResponseWriter, r *http.Request) {
             }
 
             showLoader();
-            fetch('/api/call/' + capability, {
+            fetch('/api/' + workerID + '/call/' + capability, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(body)
@@ -557,6 +621,17 @@ func (h *IndexHandler) HandleIndex(w http.ResponseWriter, r *http.Request) {
                 .then(showResult)
                 .catch(err => showError(err.message));
         }
+
+        // Auto-load capabilities on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            fetch('/api/capabilities')
+                .then(r => r.json())
+                .then(data => {
+                    console.log('✅ Loaded capabilities:', data);
+                    // Could render dynamic cards here if needed
+                })
+                .catch(err => console.error('Failed to load capabilities:', err));
+        });
     </script>
 </body>
 </html>

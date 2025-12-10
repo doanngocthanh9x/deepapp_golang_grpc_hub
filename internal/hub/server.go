@@ -149,6 +149,18 @@ func (s *Server) handleMessage(msg *proto.Message) {
 		return
 	}
 
+	// Handle worker-to-worker calls
+	if msg.Type == proto.MessageType_WORKER_CALL {
+		s.handleWorkerCall(msg)
+		return
+	}
+
+	// Handle responses (including worker-to-worker responses)
+	if msg.Type == proto.MessageType_RESPONSE {
+		s.handleResponse(msg)
+		return
+	}
+
 	// Handle capability discovery requests
 	if msg.Channel == "capability_discovery" || (msg.Type == proto.MessageType_REQUEST && msg.Content != "") {
 		var reqData map[string]interface{}

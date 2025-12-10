@@ -28,6 +28,7 @@ enum MessageType {
   REGISTER = 3; // Worker registration
   REQUEST = 4;  // Service request
   RESPONSE = 5; // Service response
+  WORKER_CALL = 6; // Worker-to-Worker call
 }
 
 // Worker registration message

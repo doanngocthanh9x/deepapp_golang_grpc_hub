@@ -1,31 +1,45 @@
 # Multi-stage build for all services in one container
 # Stage 1: Build Go services (Hub + Web API)
-FROM golang:1.18-alpine AS go-builder
+FROM golang:1.19-alpine AS go-builder
 
-# Install build dependencies for CGO (needed for SQLite)
-RUN apk add --no-cache gcc musl-dev
+# Install build dependencies (not needed for pure-Go SQLite)
+RUN apk add --no-cache git
 
 WORKDIR /app
 
-# Copy go mod files and download dependencies (CACHED)
-COPY go.mod go.sum ./
-RUN go mod download
-
-# Copy source code (NOT CACHED - use build arg)
-ARG CACHEBUST=1
+# Copy source code first to detect all imports
 COPY . .
 
-# Build Hub (enable CGO for SQLite)
-RUN CGO_ENABLED=1 GOOS=linux go build -a \
-    -ldflags="-X main.BuildTime=$(date +%s)" \
-    -o hub cmd/hub/main.go
+# Generate go.sum and download all dependencies (including modernc.org/sqlite)
+RUN go mod tidy && go mod download
 
-# Build Web API (build entire package, not just main.go)
+# Build Hub with pure-Go SQLite (NO CGO needed)
+RUN CGO_ENABLED=0 GOOS=linux go build -a -o hub cmd/hub/main.go
+
+# Build Web API
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o webapi ./services/web-api
+
+# Build Go Worker with SDK (build from root to access shared/)
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo \
-    -ldflags="-X main.BuildTime=$(date +%s)" \
-    -o webapi ./services/web-api
+    -o go-worker ./services/go-worker/main.go
 
-# Stage 2: Build Java Worker
+# Stage 2: Build Node.js Worker
+FROM node:18-alpine AS node-builder
+
+WORKDIR /app
+
+# Copy package.json and install dependencies (CACHED)
+COPY services/node-worker/package.json ./
+RUN npm install --production
+
+# Copy Node.js worker code (NOT CACHED)
+ARG CACHEBUST=1
+COPY services/node-worker/*.js ./
+COPY services/node-worker/plugins ./plugins/
+COPY services/node-worker/worker-to-worker ./worker-to-worker/
+COPY proto ../proto/
+
+# Stage 3: Build Java Worker
 FROM eclipse-temurin:17-jdk AS java-builder
 
 # Install Maven (CACHED)
@@ -45,42 +59,127 @@ ARG CACHEBUST=1
 COPY services/java-simple-worker/src ./src
 
 # Build Java application
-RUN echo "Building Java at $(date +%s)" && mvn clean package -DskipTests
+RUN mvn clean package -DskipTests
 
-# Stage 3: Python Worker preparation
-FROM python:3.10-alpine AS python-builder
+# Stage 4: Python Worker preparation (Ubuntu-based to match runtime)
+FROM ubuntu:22.04 AS python-builder
+
+ENV DEBIAN_FRONTEND=noninteractive
 
 WORKDIR /app
 
-# Install build dependencies for Python packages with C extensions
-RUN apk add --no-cache gcc musl-dev linux-headers
+# Install Python and build dependencies
+RUN apt-get update && apt-get install -y \
+    python3.10 \
+    python3-pip \
+    gcc \
+    g++ \
+    make \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install dependencies (CACHED)
 COPY services/python-worker/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip3 install --no-cache-dir -r requirements.txt
 
-# Stage 4: Final runtime image with all services
-FROM python:3.10-alpine
+# Stage 5: C++ Worker (Ubuntu-based with full gRPC support)
+FROM ubuntu:22.04 AS cpp-builder
 
-# Install Java Runtime (for Java worker) and supervisor (for process management)
-RUN apk add --no-cache openjdk21-jre supervisor netcat-openbsd wget
+ENV DEBIAN_FRONTEND=noninteractive
 
 WORKDIR /app
 
-# Copy Python dependencies from builder
-COPY --from=python-builder /usr/local/lib/python3.10/site-packages /usr/local/lib/python3.10/site-packages
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    cmake \
+    pkg-config \
+    libgrpc++-dev \
+    protobuf-compiler-grpc \
+    nlohmann-json3-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy proto files and generate C++ code
+COPY proto/ proto/
+RUN cd proto && \
+    protoc --cpp_out=. --grpc_out=. \
+    --plugin=protoc-gen-grpc=/usr/bin/grpc_cpp_plugin \
+    hub.proto && \
+    ls -la *.pb.* && echo "Proto files generated successfully"
+
+# Copy C++ worker source
+COPY services/cpp-worker/ services/cpp-worker/
+
+# Build C++ worker with proto path
+RUN cd services/cpp-worker && \
+    mkdir -p build && cd build && \
+    cmake -DPROTO_PATH=/app/proto .. && \
+    make -j$(nproc) && \
+    ls -la cpp-worker
+
+# Stage 6: Final runtime image with all services (Ubuntu-based for C++ support)
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install Python 3.10, Java Runtime, Node.js, and supervisor
+RUN apt-get update && apt-get install -y \
+    python3.10 \
+    python3-pip \
+    openjdk-21-jre-headless \
+    supervisor \
+    netcat \
+    wget \
+    curl \
+    ca-certificates \
+    gnupg \
+    libgrpc++1 \
+    libprotobuf23 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Node.js 18.x from NodeSource
+RUN mkdir -p /etc/apt/keyrings && \
+    curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg && \
+    echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_18.x nodistro main" | tee /etc/apt/sources.list.d/nodesource.list && \
+    apt-get update && \
+    apt-get install -y nodejs && \
+    rm -rf /var/lib/apt/lists/*
+
+# Create python3 symlink
+RUN ln -sf /usr/bin/python3.10 /usr/bin/python3 && \
+    ln -sf /usr/bin/python3.10 /usr/bin/python
+
+WORKDIR /app
+
+# Copy Python dependencies from Ubuntu builder
+COPY --from=python-builder /usr/local/lib/python3.10/dist-packages /usr/local/lib/python3.10/dist-packages
 
 # Copy Go binaries from go-builder
 COPY --from=go-builder /app/hub /usr/local/bin/hub
 COPY --from=go-builder /app/webapi /usr/local/bin/webapi
+COPY --from=go-builder /app/go-worker /usr/local/bin/go-worker
 
 # Copy Java JAR from java-builder
 COPY --from=java-builder /app/target/java-simple-worker-1.0.0.jar /app/java-worker.jar
+
+# Copy Node.js worker from node-builder
+COPY --from=node-builder /app /app/node-worker
+
+# Copy C++ worker binary from cpp-builder
+COPY --from=cpp-builder /app/services/cpp-worker/build/cpp-worker /usr/local/bin/cpp-worker
 
 # Copy Python worker code (NOT CACHED - use build arg)
 ARG CACHEBUST=1
 RUN echo "Copying Python code at $(date +%s)"
 COPY services/python-worker/*.py /app/python-worker/
+COPY services/python-worker/plugins/ /app/python-worker/plugins/
+COPY services/python-worker/worker-to-worker/ /app/python-worker/worker-to-worker/
+
+# Copy Go worker plugins
+COPY services/go-worker/plugins/ /app/go-worker/plugins/
+COPY services/go-worker/worker-to-worker/ /app/go-worker/worker-to-worker/
+
+# Copy proto for Node.js and Go workers
+COPY proto /app/proto
 
 # Create supervisor configuration
 RUN mkdir -p /etc/supervisor/conf.d /var/log/supervisor /data
@@ -103,7 +202,7 @@ environment=PORT=50051,LOG_LEVEL=info,DB_PATH=/data/hub.db
 priority=10
 
 [program:python-worker]
-command=python3 -u /app/python-worker/worker_grpc.py
+command=python3 -u /app/python-worker/worker_plugin_system.py
 directory=/app/python-worker
 autostart=true
 autorestart=true
@@ -123,6 +222,42 @@ stdout_logfile=/var/log/supervisor/java-worker.out.log
 environment=HUB_ADDRESS=localhost:50051,WORKER_ID=java-simple-worker
 priority=20
 startsecs=5
+
+[program:node-worker]
+command=node /app/node-worker/worker-plugin-system.js
+directory=/app/node-worker
+autostart=true
+autorestart=true
+stderr_logfile=/var/log/supervisor/node-worker.err.log
+stdout_logfile=/var/log/supervisor/node-worker.out.log
+environment=HUB_ADDRESS=localhost:50051,WORKER_ID=node-worker
+priority=20
+startsecs=5
+
+[program:go-worker]
+command=/usr/local/bin/go-worker
+directory=/app/go-worker
+autostart=true
+autorestart=true
+stderr_logfile=/var/log/supervisor/go-worker.err.log
+stdout_logfile=/var/log/supervisor/go-worker.out.log
+environment=HUB_ADDRESS=localhost:50051,WORKER_ID=go-worker
+priority=20
+startsecs=5
+
+[program:cpp-worker]
+command=/usr/local/bin/cpp-worker
+directory=/app
+autostart=false
+autorestart=false
+stderr_logfile=/var/log/supervisor/cpp-worker.err.log
+stdout_logfile=/var/log/supervisor/cpp-worker.out.log
+environment=HUB_ADDRESS=localhost:50051,WORKER_ID=cpp-worker
+priority=20
+startsecs=5
+# NOTE: Disabled due to SIGSEGV on initialization
+# Binary compiles successfully but crashes at runtime
+# Likely issue: shared_ptr/plugin initialization or gRPC library mismatch
 
 [program:webapi]
 command=/usr/local/bin/webapi

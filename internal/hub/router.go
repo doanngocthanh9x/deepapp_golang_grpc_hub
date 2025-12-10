@@ -24,8 +24,8 @@ func (r *Router) Route(msg *proto.Message) {
 		r.routeBroadcast(msg)
 	case proto.MessageType_CHANNEL:
 		r.routeChannel(msg)
-	case proto.MessageType_REQUEST, proto.MessageType_RESPONSE:
-		// Route requests and responses as direct messages
+	case proto.MessageType_REQUEST, proto.MessageType_RESPONSE, proto.MessageType_WORKER_CALL:
+		// Route requests, responses, and worker-to-worker calls as direct messages
 		r.routeDirect(msg)
 	}
 }

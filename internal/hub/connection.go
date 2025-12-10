@@ -36,6 +36,13 @@ func (cm *ConnectionManager) Get(clientID string) (proto.HubService_ConnectServe
 	return stream, exists
 }
 
+func (cm *ConnectionManager) Has(clientID string) bool {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+	_, exists := cm.connections[clientID]
+	return exists
+}
+
 func (cm *ConnectionManager) Broadcast(msg *proto.Message) {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
