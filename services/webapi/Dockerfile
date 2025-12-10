@@ -3,21 +3,21 @@ FROM golang:1.21-alpine AS builder
 
 WORKDIR /app
 
+# Install git for go mod
+RUN apk add --no-cache git
+
 # Copy go mod files
 COPY go.mod go.sum ./
-RUN go mod download
 
-# Copy shared code
-COPY shared/ ./shared/
-COPY internal/ ./internal/
-COPY proto/ ./proto/
+# Copy all source code
+COPY . .
 
-# Copy webapi service
-COPY services/webapi/ ./services/webapi/
+# Tidy and download modules
+RUN go mod tidy && go mod download
 
-# Build webapi
+# Build webapi from services/web-api
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo \
-    -o webapi ./services/webapi/main.go
+    -o webapi ./services/web-api/main.go
 
 # Runtime stage
 FROM alpine:3.18

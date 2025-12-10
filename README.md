@@ -135,3 +135,54 @@ After starting the server and running the client, you can send messages like:
 - `channel:news:Breaking news!`
 
 The client will receive messages in real-time through the stream.
+
+## Deployment
+
+### Production Deployment from GitHub Container Registry
+
+See **[DEPLOYMENT-GUIDE.md](./DEPLOYMENT-GUIDE.md)** for complete instructions.
+
+#### Quick Start - All-in-One
+
+```bash
+# Login to GitHub Container Registry
+export GITHUB_USERNAME="your-username"
+export GITHUB_TOKEN="your-token"
+echo $GITHUB_TOKEN | docker login ghcr.io -u $GITHUB_USERNAME --password-stdin
+
+# Set repository and tag
+export GITHUB_REPOSITORY="doanngocthanh9x/deepapp_golang_grpc_hub"
+export IMAGE_TAG=main
+
+# Deploy
+docker-compose -f docker-compose.registry-all-in-one.yml up -d
+
+# Check status
+docker logs deepapp-hub-all-in-one
+curl http://localhost:8081/api/capabilities
+```
+
+#### Quick Start - Microservices
+
+```bash
+# Deploy separate services
+docker-compose -f docker-compose.registry.yml up -d
+
+# Check status
+docker-compose -f docker-compose.registry.yml ps
+```
+
+### CI/CD
+
+GitHub Actions automatically builds and pushes images on every push to `main` or `develop`. See **[docs/CI-CD-GUIDE.md](./docs/CI-CD-GUIDE.md)** for details.
+
+**Available Images:**
+- `ghcr.io/doanngocthanh9x/deepapp_golang_grpc_hub/all-in-one:main`
+- `ghcr.io/doanngocthanh9x/deepapp_golang_grpc_hub/hub:main`
+- `ghcr.io/doanngocthanh9x/deepapp_golang_grpc_hub/webapi:main`
+- `ghcr.io/doanngocthanh9x/deepapp_golang_grpc_hub/python-worker:main`
+- `ghcr.io/doanngocthanh9x/deepapp_golang_grpc_hub/java-worker:main`
+- `ghcr.io/doanngocthanh9x/deepapp_golang_grpc_hub/node-worker:main`
+- `ghcr.io/doanngocthanh9x/deepapp_golang_grpc_hub/go-worker:main`
+- `ghcr.io/doanngocthanh9x/deepapp_golang_grpc_hub/cpp-worker:main`
+

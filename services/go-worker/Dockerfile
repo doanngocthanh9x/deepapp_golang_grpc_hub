@@ -3,17 +3,17 @@ FROM golang:1.21-alpine AS builder
 
 WORKDIR /app
 
+# Install git for go mod
+RUN apk add --no-cache git
+
 # Copy go mod files
 COPY go.mod go.sum ./
-RUN go mod download
 
-# Copy shared code (including SDK)
-COPY shared/ ./shared/
-COPY internal/ ./internal/
-COPY proto/ ./proto/
+# Copy all source code
+COPY . .
 
-# Copy go-worker service
-COPY services/go-worker/ ./services/go-worker/
+# Tidy and download modules
+RUN go mod tidy && go mod download
 
 # Build go-worker
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo \

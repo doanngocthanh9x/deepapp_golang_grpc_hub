@@ -1,6 +1,44 @@
 version: '3.8'
 
 services:
+  # All-in-One: Single container with Hub + WebAPI + All Workers
+  deepapp-hub:
+    image: ghcr.io/${GITHUB_REPOSITORY:-doanngocthanh9x/deepapp_golang_grpc_hub}/all-in-one:${IMAGE_TAG:-latest}
+    container_name: deepapp-hub-all-in-one
+    ports:
+      - "8081:8081"  # WebAPI
+      - "50051:50051"  # Hub gRPC
+    restart: unless-stopped
+    environment:
+      - HUB_ADDRESS=localhost:50051
+      - PORT=8081
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8081/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+# Usage:
+# 1. Set environment variables:
+#    export GITHUB_REPOSITORY=doanngocthanh9x/deepapp_golang_grpc_hub
+#    export IMAGE_TAG=main
+#
+# 2. Login to GitHub Container Registry:
+#    echo $GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin
+#
+# 3. Pull and run:
+#    docker-compose -f docker-compose.registry.yml pull
+#    docker-compose -f docker-compose.registry.yml up -d
+#
+# 4. Check status:
+#    docker-compose -f docker-compose.registry.yml ps
+#    docker logs deepapp-hub-all-in-one
+#
+# 5. Access:
+#    WebAPI: http://localhost:8081
+#    Swagger: http://localhost:8081/api/docs
+#    Capabilities: http://localhost:8081/api/capabilities
   hub:
     image: ghcr.io/${GITHUB_REPOSITORY}/hub:${IMAGE_TAG:-main}
     container_name: grpc-hub

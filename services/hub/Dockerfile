@@ -3,21 +3,21 @@ FROM golang:1.21-alpine AS builder
 
 WORKDIR /app
 
+# Install git for go mod
+RUN apk add --no-cache git
+
 # Copy go mod files
 COPY go.mod go.sum ./
-RUN go mod download
 
-# Copy shared code
-COPY shared/ ./shared/
-COPY internal/ ./internal/
-COPY proto/ ./proto/
+# Copy all source to ensure go mod tidy works
+COPY . .
 
-# Copy hub service
-COPY services/hub/ ./services/hub/
+# Tidy and download modules
+RUN go mod tidy && go mod download
 
-# Build hub
+# Build hub from cmd/hub
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo \
-    -o hub ./services/hub/main.go
+    -o hub ./cmd/hub/main.go
 
 # Runtime stage
 FROM alpine:3.18

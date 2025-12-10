@@ -134,6 +134,8 @@ RUN apt-get update && apt-get install -y \
     gnupg \
     libgrpc++1 \
     libprotobuf23 \
+    libgl1 \
+    libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Node.js 18.x from NodeSource
@@ -172,6 +174,8 @@ ARG CACHEBUST=1
 RUN echo "Copying Python code at $(date +%s)"
 COPY services/python-worker/*.py /app/python-worker/
 COPY services/python-worker/plugins/ /app/python-worker/plugins/
+COPY services/python-worker/nets/ /app/python-worker/nets/
+COPY services/python-worker/utils/ /app/python-worker/utils/
 COPY services/python-worker/worker-to-worker/ /app/python-worker/worker-to-worker/
 
 # Copy Go worker plugins

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -480,6 +481,7 @@ func (h *DynamicHandler) HandleWorkerCall(w http.ResponseWriter, r *http.Request
 		params["filename"] = header.Filename
 		params["size"] = len(fileData)
 		params["content_type"] = header.Header.Get("Content-Type")
+		params["file"] = base64.StdEncoding.EncodeToString(fileData)
 
 		requestJSON, _ := json.Marshal(params)
 		requestData = string(requestJSON)
