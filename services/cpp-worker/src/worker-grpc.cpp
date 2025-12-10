@@ -26,19 +26,28 @@ private:
     std::string hub_address_;
     std::unique_ptr<hub::HubService::Stub> stub_;
     std::shared_ptr<ClientReaderWriter<hub::Message, hub::Message>> stream_;
+    std::unique_ptr<ClientContext> context_;  // Must outlive the stream!
     std::atomic<bool> running_;
     PluginManager plugin_manager_;
 
     void sendRegistration() {
+        std::cout << "[cpp-worker] 📝 Preparing registration message...\n";
+        
         hub::Message msg;
         msg.set_type(hub::MessageType::REGISTER);
         msg.set_from(worker_id_);
         msg.set_to("hub");
 
+        std::cout << "[cpp-worker] 📝 Building capabilities JSON...\n";
         json capabilities = json::array();
         
         // Get all plugins and create capabilities
-        for (const auto& plugin : plugin_manager_.getAllPlugins()) {
+        std::cout << "[cpp-worker] 📝 Getting plugins...\n";
+        auto all_plugins = plugin_manager_.getAllPlugins();
+        std::cout << "[cpp-worker] 📝 Found " << all_plugins.size() << " plugins\n";
+        
+        for (const auto& plugin : all_plugins) {
+            std::cout << "[cpp-worker] 📝 Processing plugin: " << plugin->getName() << "\n";
             json cap = {
                 {"name", plugin->getName()},
                 {"description", plugin->getDescription()},
@@ -47,8 +56,10 @@ private:
                 {"optional_params", plugin->getOptionalParams()}
             };
             capabilities.push_back(cap);
+            std::cout << "[cpp-worker] 📝 Plugin capability added\n";
         }
 
+        std::cout << "[cpp-worker] 📝 Creating registration data JSON...\n";
         json reg_data = {
             {"worker_id", worker_id_},
             {"worker_type", "cpp"},
@@ -56,8 +67,13 @@ private:
             {"status", "active"}
         };
 
-        msg.set_content(reg_data.dump());
+        std::cout << "[cpp-worker] 📝 Converting JSON to string...\n";
+        std::string json_str = reg_data.dump();
+        std::cout << "[cpp-worker] 📝 JSON string length: " << json_str.length() << "\n";
         
+        msg.set_content(json_str);
+        
+        std::cout << "[cpp-worker] 📤 Sending registration...\n";
         if (stream_->Write(msg)) {
             std::cout << "[cpp-worker] 📤 Sent registration with " 
                       << capabilities.size() << " capabilities\n";
@@ -207,8 +223,9 @@ public:
             
             std::cout << "[cpp-worker] ✓ Stub created\n";
             
-            ClientContext context;
-            stream_ = stub_->Connect(&context);
+            // Context must outlive the stream!
+            context_ = std::make_unique<ClientContext>();
+            stream_ = stub_->Connect(context_.get());
             
             if (!stream_) {
                 std::cerr << "[cpp-worker] ❌ Failed to connect stream\n";
@@ -262,18 +279,28 @@ void signalHandler(int signum) {
 }
 
 int main() {
+    // Explicitly set unbuffered output for debugging
+    std::cout.setf(std::ios::unitbuf);
+    std::cerr.setf(std::ios::unitbuf);
+    
+    std::cout << "[cpp-worker] 🚀 Starting C++ Worker (step 1)...\n";
+    
+    // Initialize Google's logging library used by gRPC/protobuf
+    GOOGLE_PROTOBUF_VERIFY_VERSION;
+    
     try {
-        std::cout << "[cpp-worker] 🚀 C++ Worker starting...\n";
+        std::cout << "[cpp-worker] 🚀 Step 2: Setting up signal handlers...\n";
         
         signal(SIGINT, signalHandler);
         signal(SIGTERM, signalHandler);
         
+        std::cout << "[cpp-worker] 🚀 Step 3: Declaring variables...\n" << std::flush;
         const std::string worker_id = "cpp-worker";
         const std::string hub_address = "localhost:50051";
         
-        std::cout << "[cpp-worker] Creating worker instance...\n";
+        std::cout << "[cpp-worker] 🚀 Step 4: Creating worker instance...\n" << std::flush;
         worker_instance = std::make_unique<CPPWorkerGRPC>(worker_id, hub_address);
-        std::cout << "[cpp-worker] ✅ Worker instance created\n";
+        std::cout << "[cpp-worker] ✅ Worker instance created\n" << std::flush;
         
         // Retry connection
         int max_retries = 10;

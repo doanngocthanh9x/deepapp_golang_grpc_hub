@@ -1,0 +1,10 @@
+# Core dependencies (lightweight)
+onnxruntime>=1.16.0
+opencv-python-headless>=4.8.0  # Headless version - nhẹ hơn opencv-python
+numpy>=1.24.0
+Pillow>=10.0.0
+PyYAML>=6.0
+
+# gRPC (đã có từ python-worker nên có thể skip nếu dùng chung)
+# grpcio>=1.59.0
+# protobuf>=4.24.0

@@ -350,13 +350,12 @@ func (h *DynamicHandler) HandleDynamicCall(w http.ResponseWriter, r *http.Reques
 			params = make(map[string]interface{})
 		}
 
-		// Add file info to params
+		// Add file info and base64 encoded data to params
 		params["filename"] = header.Filename
 		params["size"] = len(fileData)
 		params["content_type"] = header.Header.Get("Content-Type")
+		params["image"] = base64.StdEncoding.EncodeToString(fileData) // Encode file as base64
 
-		// Encode file as base64 if needed
-		// For now, just send file info
 		requestJSON, _ := json.Marshal(params)
 		requestData = string(requestJSON)
 	} else {
@@ -481,7 +480,11 @@ func (h *DynamicHandler) HandleWorkerCall(w http.ResponseWriter, r *http.Request
 		params["filename"] = header.Filename
 		params["size"] = len(fileData)
 		params["content_type"] = header.Header.Get("Content-Type")
-		params["file"] = base64.StdEncoding.EncodeToString(fileData)
+		
+		// Encode file as base64 - support both 'file' and 'image' field names
+		encodedData := base64.StdEncoding.EncodeToString(fileData)
+		params["file"] = encodedData
+		params["image"] = encodedData // Also add as 'image' for OCR workers
 
 		requestJSON, _ := json.Marshal(params)
 		requestData = string(requestJSON)

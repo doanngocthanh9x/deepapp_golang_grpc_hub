@@ -11,7 +11,8 @@ services:
         CACHEBUST: ${CACHEBUST:-1}
     container_name: deepapp-hub-all-in-one
     ports:
-      - "8081:8081"  # Only Web API is exposed
+      - "8081:8081"  # Web API
+      - "9001:9001"  # Supervisor Web UI (admin/admin123)
     volumes:
       - hub-data:/data  # Persist Hub database
     restart: unless-stopped

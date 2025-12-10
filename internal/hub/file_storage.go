@@ -45,7 +45,6 @@ func (s *Server) UploadFile(stream proto.HubService_UploadFileServer) error {
 	var filePath string
 	var file *os.File
 	var totalReceived int64
-	var err error
 
 	for {
 		chunk, err := stream.Recv()
@@ -97,10 +96,10 @@ func (s *Server) UploadFile(stream proto.HubService_UploadFileServer) error {
 
 	// Send response
 	return stream.SendAndClose(&proto.FileUploadResponse{
-		FileId:  fileID,
-		Success: true,
-		Message: "File uploaded successfully",
-		Size:    totalReceived,
+		FileId:        fileID,
+		BytesReceived: totalReceived,
+		Status:        "success",
+		Error:         "",
 	})
 }
 

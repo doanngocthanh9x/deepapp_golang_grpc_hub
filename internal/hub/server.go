@@ -14,6 +14,7 @@ import (
 )
 
 type Server struct {
+	proto.UnimplementedHubServiceServer
 	config         *config.Config
 	server         *grpc.Server
 	connMgr        *ConnectionManager
